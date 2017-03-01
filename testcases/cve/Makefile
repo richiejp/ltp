@@ -19,11 +19,7 @@ include $(top_srcdir)/include/mk/testcases.mk
 
 CFLAGS			+= -D_GNU_SOURCE
 
-<<<<<<< HEAD
-cve-2016-7117:	LDFLAGS += -lpthread
-=======
 cve-2014-0196:	LDFLAGS += -lpthread -lutil -lrt
 cve-2016-7117:	LDFLAGS += -lpthread -lrt
->>>>>>> 4dbfb8e79... Add -lrt
 
 include $(top_srcdir)/include/mk/generic_leaf_target.mk
