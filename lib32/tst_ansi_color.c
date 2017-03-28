@@ -1,0 +1,1 @@
+../lib/tst_ansi_color.c

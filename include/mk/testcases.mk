@@ -30,8 +30,10 @@ TKI_DIR		:= testcases/kernel/include
 LSN_H		:= $(abs_top_builddir)/$(TKI_DIR)/linux_syscall_numbers.h
 
 LIBLTP_DIR	:= $(abs_top_builddir)/lib
+LIBLTP_DIR32	:= $(abs_top_builddir)/lib32
 
 LIBLTP		:= $(LIBLTP_DIR)/libltp.a
+LIBLTP32	:= $(LIBLTP_DIR32)/libltp.a
 
 $(APICMDS_DIR)/tst_kvercmp: $(APICMDS_DIR)
 	$(MAKE) -C "$^" -f "$(abs_top_srcdir)/tools/apicmds/Makefile" all
@@ -39,10 +41,17 @@ $(APICMDS_DIR)/tst_kvercmp: $(APICMDS_DIR)
 $(LIBLTP): $(LIBLTP_DIR)
 	$(MAKE) -C "$^" -f "$(abs_top_srcdir)/lib/Makefile" all
 
+$(LIBLTP32): $(LIBLTP_DIR32)
+	$(MAKE) -C "$^" -f "$(abs_top_srcdir)/lib32/Makefile" all
+
 $(LSN_H): $(abs_top_builddir)/$(TKI_DIR)
 	$(MAKE) -C "$^" -f "$(abs_top_srcdir)/$(TKI_DIR)/Makefile" all
 
 MAKE_DEPS	:= $(LIBLTP) $(LSN_H)
+
+ifneq ($(CC_M32),)
+MAKE_DEPS	+= $(LIBLTP32)
+endif
 
 # For linux_syscall_numbers.h
 CPPFLAGS	+= -I$(abs_top_builddir)/$(TKI_DIR)
