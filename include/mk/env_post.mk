@@ -54,7 +54,24 @@ MAKE_TARGETS			:= $(filter-out $(FILTER_OUT_MAKE_TARGETS),$(MAKE_TARGETS))
 
 CLEAN_TARGETS			+= $(MAKE_TARGETS) *.o *.pyc
 
-$(MAKE_TARGETS):	LDFLAGS += -L$(top_builddir)/lib$(subst -m,,$(filter -m32,$(CFLAGS)))
+#
+# We link against lib32 only if:
+# * -m32 wasn't passed in global (configure) CFLAGS
+# * -m32 was passed in target specific CFLAGS
+#
+# The testcases must do:
+#
+# foo: CFLAGS += $(CFLAGS_M32)
+#
+# In order to compile the test in 32bit mode on 64bit arch, which takes care of
+# the situation when -m32 is not supported by compiler, since $(CFLAGS_M32) is
+# empty and we default to linking against (possibly 64bit) lib/ directory.
+#
+ifeq ($(filter -m32,$(CFLAGS)),)
+$(MAKE_TARGETS): LDFLAGS += -L$(top_builddir)/lib$(subst -m,,$(filter -m32,$(CFLAGS)))
+else
+LDFLAGS			 += -L$(top_builddir)/lib
+endif
 
 # Majority of the files end up in testcases/bin...
 INSTALL_DIR			?= testcases/bin

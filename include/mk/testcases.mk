@@ -49,7 +49,7 @@ $(LSN_H): $(abs_top_builddir)/$(TKI_DIR)
 
 MAKE_DEPS	:= $(LIBLTP) $(LSN_H)
 
-ifneq ($(CC_M32),)
+ifneq ($(CFLAGS_M32),)
 MAKE_DEPS	+= $(LIBLTP32)
 endif
 

@@ -20,6 +20,6 @@ top_srcdir		?= ../../../..
 
 include $(top_srcdir)/include/mk/testcases.mk
 
-CFLAGS += $(CC_M32)
+add_key02: CFLAGS += $(CFLAGS_M32)
 
 include $(top_srcdir)/include/mk/generic_leaf_target.mk

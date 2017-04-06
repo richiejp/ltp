@@ -15,7 +15,7 @@ dnl along with this program; if not, write the Free Software Foundation,
 dnl Inc.,  51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 dnl
 
-AC_DEFUN([LTP_CHECK_CC_M32],[dnl
+AC_DEFUN([LTP_CHECK_CFLAGS_M32],[dnl
 
 flag="-m32"
 AC_MSG_CHECKING([if $CC supports $flag])
@@ -25,12 +25,26 @@ CFLAGS="$CFLAGS $flag"
 
 AC_LINK_IFELSE(
 	[AC_LANG_PROGRAM([])],
-	[CC_M32="$flag"]
+	[CFLAGS_M32="$flag"]
 	[AC_MSG_RESULT([yes])],
 	[AC_MSG_RESULT([no])]
 )
 
-AC_SUBST(CC_M32)
-CFLAGS="$backup_cflags"
+AC_SUBST(CFLAGS_M32)
 
+AC_MSG_CHECKING([for __sync_add_and_fetch with -m32])
+AC_LINK_IFELSE([AC_LANG_SOURCE([
+int main(void) {
+	int i = 0;
+	return __sync_add_and_fetch(&i, 1);
+}])],[has_saac="yes"])
+
+if test "x$has_saac" = xyes; then
+	AC_DEFINE(HAVE_SYNC_ADD_AND_FETCH_M32,1,[Define to 1 if you have __sync_add_and_fetch with -m32])
+	AC_MSG_RESULT(yes)
+else
+	AC_MSG_RESULT(no)
+fi
+
+CFLAGS="$backup_cflags"
 ])

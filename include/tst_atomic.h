@@ -20,7 +20,8 @@
 
 #include "config.h"
 
-#if HAVE_SYNC_ADD_AND_FETCH == 1
+#if (!defined(M32) && HAVE_SYNC_ADD_AND_FETCH == 1) \
+    || (defined(M32) && HAVE_SYNC_ADD_AND_FETCH_M32 == 1)
 static inline int tst_atomic_add_return(int i, int *v)
 {
 	return __sync_add_and_fetch(v, i);
