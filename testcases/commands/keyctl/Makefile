@@ -1,5 +1,8 @@
 #
-#    Copyright (C) 2016, Linux Test Project.
+#    commands/keyctl testcases Makefile.
+#
+#    Copyright (c) 2017 Fujitsu Ltd.
+#    Author:Guangwen Feng <fenggw-fnst@cn.fujitsu.com>
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -10,13 +13,12 @@
 #    but WITHOUT ANY WARRANTY; without even the implied warranty of
 #    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #    GNU General Public License for more details.
+#
 
-top_srcdir		?= ../../../..
+top_srcdir		?= ../../..
 
 include $(top_srcdir)/include/mk/env_pre.mk
 
-INSTALL_DIR		:= testcases/data/ld01
-MAKE_TARGETS		:=
-INSTALL_TARGETS		:= *.c
+INSTALL_TARGETS		:= keyctl01.sh
 
 include $(top_srcdir)/include/mk/generic_leaf_target.mk

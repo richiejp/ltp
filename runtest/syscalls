@@ -488,6 +488,7 @@ io_submit01 io_submit01
 
 keyctl01 keyctl01
 keyctl02 keyctl02
+keyctl03 keyctl03
 
 kcmp01 kcmp01
 kcmp02 kcmp02
@@ -553,6 +554,7 @@ lseek07 lseek07
 lseek08 lseek08
 lseek09 lseek09
 lseek10 lseek10
+lseek11 lseek11
 
 lstat01A symlink01 -T lstat01
 lstat01A_64 symlink01 -T lstat01_64
@@ -848,6 +850,7 @@ pwritev02_64 pwritev02_64
 
 quotactl01 quotactl01
 quotactl02 quotactl02
+quotactl03 quotactl03
 
 read01 read01
 read02 read02

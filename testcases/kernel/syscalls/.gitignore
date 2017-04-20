@@ -453,6 +453,7 @@
 /ipc/shmget/shmget05
 /keyctl/keyctl01
 /keyctl/keyctl02
+/keyctl/keyctl03
 /kcmp/kcmp01
 /kcmp/kcmp02
 /kcmp/kcmp03
@@ -505,6 +506,7 @@
 /lseek/lseek08
 /lseek/lseek09
 /lseek/lseek10
+/lseek/lseek11
 /lstat/lstat01
 /lstat/lstat01_64
 /lstat/lstat02
@@ -712,6 +714,7 @@
 /pwritev/pwritev02_64
 /quotactl/quotactl01
 /quotactl/quotactl02
+/quotactl/quotactl03
 /read/read01
 /read/read02
 /read/read03
