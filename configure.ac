@@ -37,11 +37,13 @@ AC_CHECK_HEADERS([ \
     mm.h \
     pthread.h \
     sys/xattr.h \
+    sys/personality.h \
     linux/aio_abi.h \
     linux/genetlink.h \
     linux/mempolicy.h \
     linux/module.h \
     linux/netlink.h \
+    linux/personality.h \
     sys/epoll.h \
     sys/inotify.h \
     sys/fanotify.h \
@@ -195,5 +197,6 @@ LTP_CHECK_SYNC_ADD_AND_FETCH
 LTP_CHECK_BUILTIN_CLEAR_CACHE
 LTP_CHECK_MMSGHDR
 LTP_CHECK_UNAME_DOMAINNAME
+LTP_CHECK_PERSONALITY
 
 AC_OUTPUT
