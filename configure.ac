@@ -39,6 +39,8 @@ AC_CHECK_HEADERS([ \
     sys/xattr.h \
     sys/personality.h \
     linux/genetlink.h \
+    linux/if_packet.h \
+    linux/if_ether.h \
     linux/mempolicy.h \
     linux/module.h \
     linux/netlink.h \
@@ -197,5 +199,6 @@ LTP_CHECK_BUILTIN_CLEAR_CACHE
 LTP_CHECK_MMSGHDR
 LTP_CHECK_UNAME_DOMAINNAME
 LTP_CHECK_PERSONALITY
+LTP_CHECK_TPACKET_V3
 
 AC_OUTPUT
