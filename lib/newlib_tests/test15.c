@@ -52,6 +52,12 @@ struct block {
 };
 
 static int atomic;
+/* Instead of storing seq_n on the stack (probably next to the atomic variable
+ * above), we store it in the middle of some anonymouse mapped memory and keep
+ * a pointer to it. This should decrease the probability that the value of
+ * seq_n will be synchronised between processors as a byproduct of atomic
+ * being updated.
+ */
 static int *seq_n;
 static struct block *m;
 
@@ -71,6 +77,10 @@ static void *worker_load_store(void *_id)
 	return NULL;
 }
 
+/* Attempt to stress the memory transport so that it can't fulfil load and
+ * store requests instantly. This should increasee the likelyhood of a failure
+ * if a memory fence is missing.
+ */
 static void *cache_ruiner(void *vp LTP_ATTRIBUTE_UNUSED)
 {
 	intptr_t i = 0, j;
