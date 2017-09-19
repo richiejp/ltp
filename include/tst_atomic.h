@@ -103,6 +103,8 @@ static inline void tst_atomic_store(int i, int *v)
 }
 
 #elif defined(__i386__) || defined(__x86_64__)
+# define LTP_USE_GENERIC_LOAD_STORE_ASM 1
+
 static inline int tst_atomic_add_return(int i, int *v)
 {
 	int __ret = i;
@@ -114,24 +116,6 @@ static inline int tst_atomic_add_return(int i, int *v)
 		: "+r" (__ret), "+m" (*v) : : "memory", "cc");
 
 	return i + __ret;
-}
-
-static inline int tst_atomic_load(int *v)
-{
-	int ret;
-
-	asm volatile("" : : : "memory");
-	ret = *v;
-	asm volatile("" : : : "memory");
-
-	return ret;
-}
-
-static inline void tst_atomic_store(int i, int *v)
-{
-	asm volatile("" : : : "memory");
-	*v = i;
-	asm volatile("" : : : "memory");
 }
 
 #elif defined(__powerpc__) || defined(__powerpc64__)
@@ -173,6 +157,7 @@ static inline void tst_atomic_store(int i, int *v)
 }
 
 #elif defined(__s390__) || defined(__s390x__)
+# define LTP_USE_GENERIC_LOAD_STORE_ASM 1
 
 static inline int tst_atomic_add_return(int i, int *v)
 {
@@ -190,24 +175,6 @@ static inline int tst_atomic_add_return(int i, int *v)
 		: "cc", "memory");
 
 	return old_val + i;
-}
-
-static inline int tst_atomic_load(int *v)
-{
-	int ret;
-
-	asm volatile("" : : : "memory");
-	ret = *v;
-	asm volatile("" : : : "memory");
-
-	return ret;
-}
-
-static inline void tst_atomic_store(int i, int *v)
-{
-	asm volatile("" : : : "memory");
-	*v = i;
-	asm volatile("" : : : "memory");
 }
 
 #elif defined(__arc__)
@@ -317,6 +284,7 @@ static inline void tst_atomic_store(int i, int *v)
 }
 
 #elif defined(__sparc__) && defined(__arch64__)
+# define LTP_USE_GENERIC_LOAD_STORE_ASM 1
 static inline int tst_atomic_add_return(int i, int *v)
 {
 	int ret, tmp;
@@ -340,11 +308,16 @@ static inline int tst_atomic_add_return(int i, int *v)
 	return ret;
 }
 
+#else /* HAVE_SYNC_ADD_AND_FETCH == 1 */
+# error Your compiler does not provide __atomic_add_fetch, __sync_add_and_fetch \
+        and an LTP implementation is missing for your architecture.
+#endif
+
+#ifdef LTP_USE_GENERIC_LOAD_STORE_ASM
 static inline int tst_atomic_load(int *v)
 {
 	int ret;
 
-	/* See arch/sparc/include/asm/barrier_64.h */
 	asm volatile("" : : : "memory");
 	ret = *v;
 	asm volatile("" : : : "memory");
@@ -358,10 +331,6 @@ static inline void tst_atomic_store(int i, int *v)
 	*v = i;
 	asm volatile("" : : : "memory");
 }
-
-#else /* HAVE_SYNC_ADD_AND_FETCH == 1 */
-# error Your compiler does not provide __atomic_add_fetch, __sync_add_and_fetch \
-        and an LTP implementation is missing for your architecture.
 #endif
 
 static inline int tst_atomic_inc(int *v)

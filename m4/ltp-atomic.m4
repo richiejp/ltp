@@ -19,7 +19,6 @@ int main(void) {
 	int i = 0, j = 0;
 	__atomic_add_fetch(&i, 1, __ATOMIC_ACQ_REL);
 	__atomic_load_n(&i, __ATOMIC_SEQ_CST);
-	__atomic_compare_exchange_n(&i, &j, 0, 0, __ATOMIC_RELEASE, __ATOMIC_ACQUIRE);
 	__atomic_store_n(&i, 0, __ATOMIC_RELAXED);
 	return i;
 }])],[has_atomic_mm="yes"])
