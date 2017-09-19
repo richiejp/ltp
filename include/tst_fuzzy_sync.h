@@ -198,12 +198,8 @@ static void tst_fzsync_pair_update(int loop_index, struct tst_fzsync_pair *pair)
 	double target = pair->avg_diff_trgt;
 	double avg = pair->avg_diff;
 
-	if (pair->a.tv_sec > pair->b.tv_sec)
-		pair->a.tv_nsec += 1000000000;
-	else if (pair->a.tv_sec < pair->b.tv_sec)
-		pair->b.tv_nsec += 1000000000;
-
-	diff = pair->a.tv_nsec - pair->b.tv_nsec;
+	diff = pair->a.tv_nsec - pair->b.tv_nsec
+		+ 1000000000 * MIN(1, pair->a.tv_sec - pair->b.tv_sec);
 	avg = tst_exp_moving_avg(pair->avg_alpha, diff, avg);
 	pair->avg_dev = tst_exp_moving_avg(pair->avg_alpha,
 					   fabs(diff - avg),
