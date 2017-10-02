@@ -500,6 +500,7 @@ keyctl02 keyctl02
 keyctl03 keyctl03
 keyctl04 keyctl04
 keyctl05 keyctl05
+cve-2016-9604 cve-2016-9604
 
 kcmp01 kcmp01
 kcmp02 kcmp02
