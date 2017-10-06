@@ -18,7 +18,7 @@ dnl
 dnl LTP_CHECK_KEYUTILS_SUPPORT
 dnl ----------------------------
 dnl
-AC_DEFUN([LTP_CHECK_KEYUTILS_SUPPORT],[
-AC_CHECK_HEADERS([keyutils.h], [keyutils_libs="-lkeyutils"])
-AC_SUBST([KEYUTILS_LIBS], [$keyutils_libs])
+AC_DEFUN([LTP_CHECK_KEYUTILS_SUPPORT], [
+	AC_CHECK_LIB([keyutils], [add_key], [keyutils_libs="-lkeyutils"])
+	AC_SUBST([KEYUTILS_LIBS], [$keyutils_libs])
 ])
