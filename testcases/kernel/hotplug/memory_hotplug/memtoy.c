@@ -24,8 +24,7 @@
 
 #include <stdio.h>
 #include "config.h"
-/* Shortcut because the test requires numa and mempolicy support. */
-#if HAVE_NUMA_H && HAVE_NUMAIF_H && HAVE_LINUX_MEMPOLICY_H
+#if HAVE_LIBNUMA && HAVE_NUMA_H && HAVE_NUMAIF_H && HAVE_LINUX_MEMPOLICY_H
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/mman.h>
@@ -491,10 +490,10 @@ int main(int argc, char *argv[])
 	return 0;
 
 }
-#else /* ! (HAVE_NUMA_H && HAVE_NUMAIF_H) */
+#else /* HAVE_LIBNUMA && HAVE_NUMA_H && HAVE_NUMAIF_H && HAVE_LINUX_MEMPOLICY_H */
 int main(void)
 {
-	printf("System doesn't have required numa support.\n");
+	printf("test requires libnuma >= 2\n");
 	return 0;
 }
-#endif /* HAVE_NUMA_H && HAVE_NUMAIF_H */
+#endif

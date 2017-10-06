@@ -36,7 +36,7 @@ long get_page_size(void)
 void free_pages(void **pages, unsigned int num)
 {
 
-#if HAVE_NUMA_H
+#if HAVE_LIBNUMA && HAVE_NUMA_H
 	int i;
 	size_t onepage = get_page_size();
 
@@ -168,7 +168,7 @@ int alloc_pages_on_node(void **pages, unsigned int num, int node)
 void
 verify_pages_on_nodes(void **pages, int *status, unsigned int num, int *nodes)
 {
-#if HAVE_NUMA_H
+#if HAVE_LIBNUMA && HAVE_NUMA_H
 	unsigned int i;
 	int which_node;
 	int ret;
@@ -269,7 +269,7 @@ void verify_pages_on_node(void **pages, int *status, unsigned int num, int node)
  */
 int alloc_shared_pages_on_node(void **pages, unsigned int num, int node)
 {
-#if HAVE_NUMA_H
+#if HAVE_LIBNUMA && HAVE_NUMA_H
 	char *shared;
 	unsigned int i;
 	int nodes[num];
@@ -392,7 +392,7 @@ void free_sem(sem_t * sem, int num)
  */
 void check_config(unsigned int min_nodes)
 {
-#if HAVE_NUMA_H && HAVE_NUMAIF_H
+#if HAVE_LIBNUMA && HAVE_NUMA_H && HAVE_NUMAIF_H
 	int num_allowed_nodes;
 	int ret;
 

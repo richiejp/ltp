@@ -65,7 +65,7 @@
 char *TCID = "migrate_pages02";
 int TST_TOTAL = 1;
 
-#if defined(__NR_migrate_pages) && HAVE_NUMA_H && HAVE_NUMAIF_H
+#if defined(__NR_migrate_pages) && HAVE_LIBNUMA && HAVE_NUMA_H && HAVE_NUMAIF_H
 static const char nobody_uid[] = "nobody";
 static struct passwd *ltpuser;
 static int *nodes, nodeA, nodeB;

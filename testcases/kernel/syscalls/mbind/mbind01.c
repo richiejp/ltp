@@ -26,7 +26,7 @@
 #include "numa_helper.h"
 #include "tst_test.h"
 
-#if HAVE_NUMA_H && HAVE_NUMAIF_H && HAVE_MPOL_CONSTANTS && \
+#if HAVE_LIBNUMA && HAVE_NUMA_H && HAVE_NUMAIF_H && HAVE_MPOL_CONSTANTS && \
 	defined(LIBNUMA_API_VERSION) && LIBNUMA_API_VERSION >= 2
 
 #define MEM_LENGTH (4 * 1024 * 1024)
@@ -234,5 +234,5 @@ static struct tst_test test = {
 };
 
 #else /* libnuma >= 2 */
-TST_TEST_TCONF("test requires libnuma >= 2.");
+TST_TEST_TCONF("test requires libnuma >= 2");
 #endif

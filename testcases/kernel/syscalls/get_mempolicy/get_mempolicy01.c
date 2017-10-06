@@ -66,7 +66,7 @@
 char *TCID = "get_mempolicy01";
 int TST_TOTAL = 1;
 
-#if HAVE_NUMA_H && HAVE_NUMAIF_H && HAVE_MPOL_CONSTANTS
+#if HAVE_LIBNUMA && HAVE_NUMA_H && HAVE_NUMAIF_H && HAVE_MPOL_CONSTANTS
 
 #define MEM_LENGTH	(4 * 1024 * 1024)
 
@@ -348,6 +348,6 @@ static void setup(void)
 #else
 int main(void)
 {
-	tst_brkm(TCONF, NULL, "System doesn't have required numa support");
+	tst_brkm(TCONF, NULL, "test requires libnuma >= 2");
 }
 #endif

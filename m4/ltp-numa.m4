@@ -23,7 +23,11 @@ dnl LTP_CHECK_SYSCALL_NUMA
 dnl ----------------------------
 dnl
 AC_DEFUN([LTP_CHECK_SYSCALL_NUMA],
-[dnl
+[
+AC_CHECK_LIB(numa,numa_available,[have_libnuma="yes"])
+if test "x$have_libnuma" = "xyes"; then
+	AC_DEFINE(HAVE_LIBNUMA,1,[define whether libnuma is installed])
+fi
 AC_CHECK_HEADERS([linux/mempolicy.h numa.h numaif.h],[
 	LTP_SYSCALL_NUMA_HEADERS=yes
 	AC_CHECK_LIB(numa,numa_alloc_onnode,[have_numa_alloc_onnode="yes"])
