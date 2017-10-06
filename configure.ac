@@ -36,6 +36,7 @@ AC_CHECK_HEADERS([ \
     mm.h \
     pthread.h \
     sys/xattr.h \
+    linux/can.h \
     linux/genetlink.h \
     linux/mempolicy.h \
     linux/module.h \
@@ -176,7 +177,6 @@ LTP_CHECK_TEE
 LTP_CHECK_SPLICE
 LTP_CHECK_VMSPLICE
 LTP_CHECK_TIMERFD
-LTP_CHECK_CAN_SUPPORT
 LTP_CHECK_IOVEC
 LTP_CHECK_KEYCTL
 LTP_CHECK_LINUXRANDOM
