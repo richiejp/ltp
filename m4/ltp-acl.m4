@@ -23,8 +23,7 @@ dnl LTP_CHECK_ACL_SUPPORT
 dnl ----------------------------
 dnl
 AC_DEFUN([LTP_CHECK_ACL_SUPPORT],[
-AH_TEMPLATE(HAVE_LIBACL,
-[Define to 1 if you have libacl installed.])
-AC_CHECK_HEADERS([sys/acl.h], [acl_libs="-lacl"])
-AC_SUBST([ACL_LIBS], [$acl_libs])
+	AH_TEMPLATE(HAVE_LIBACL, [Define to 1 if you have libacl installed.])
+	AC_CHECK_LIB([acl], [acl_init], [acl_libs="-lacl"])
+	AC_SUBST([ACL_LIBS], [$acl_libs])
 ])
