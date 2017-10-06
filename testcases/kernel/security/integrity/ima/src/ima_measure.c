@@ -28,6 +28,7 @@
 #include <openssl/sha.h>
 #endif
 
+#if HAVE_LIBCRYPTO && HAVE_OPENSSL_SHA_H
 #define TCG_EVENT_NAME_LEN_MAX	255
 
 char *TCID = "ima_measure";
@@ -38,8 +39,6 @@ static int verbose;
 #define print_info(format, arg...) \
 	if (verbose) \
 		printf(format, ##arg)
-
-#if HAVE_OPENSSL_SHA_H
 
 static u_int8_t zero[SHA_DIGEST_LENGTH];
 static u_int8_t fox[SHA_DIGEST_LENGTH];
@@ -97,8 +96,6 @@ static int verify_template_hash(struct event *template)
 	return 0;
 }
 
-#endif
-
 /*
  * ima_measurements.c - calculate the SHA1 aggregate-pcr value based
  * on the IMA runtime binary measurements.
@@ -131,8 +128,6 @@ static int verify_template_hash(struct event *template)
  */
 int main(int argc, char *argv[])
 {
-
-#if HAVE_OPENSSL_SHA_H
 	FILE *fp;
 	struct event template;
 	u_int8_t pcr[SHA_DIGEST_LENGTH];
@@ -212,8 +207,12 @@ int main(int argc, char *argv[])
 	verbose = 1;
 	print_info("PCRAggr (re-calculated):");
 	display_sha1_digest(pcr);
-#else
-	tst_resm(TCONF, "System doesn't have openssl/sha.h");
-#endif
 	tst_exit();
 }
+
+#else
+int main(void)
+{
+	tst_resm(TCONF, "test requires libcrypto and openssl development packages");
+}
+#endif

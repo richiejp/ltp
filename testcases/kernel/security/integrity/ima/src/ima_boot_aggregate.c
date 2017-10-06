@@ -29,6 +29,8 @@
 #include <openssl/sha.h>
 #endif
 
+#if HAVE_LIBCRYPTO && HAVE_OPENSSL_SHA_H
+
 #define MAX_EVENT_SIZE 500
 #define EVENT_HEADER_SIZE 32
 #define MAX_EVENT_DATA_SIZE (MAX_EVENT_SIZE - EVENT_HEADER_SIZE)
@@ -48,7 +50,6 @@ static void display_sha1_digest(unsigned char *pcr)
 
 int main(int argc, char *argv[])
 {
-#if HAVE_OPENSSL_SHA_H
 	unsigned char boot_aggregate[SHA_DIGEST_LENGTH];
 	struct {
 		struct {
@@ -113,8 +114,12 @@ int main(int argc, char *argv[])
 
 	printf("boot_aggregate:");
 	display_sha1_digest(boot_aggregate);
-#else
-	tst_resm(TCONF, "System doesn't have openssl/sha.h");
-#endif
 	tst_exit();
 }
+
+#else
+int main(void)
+{
+	tst_resm(TCONF, "test requires libcrypto and openssl development packages");
+}
+#endif

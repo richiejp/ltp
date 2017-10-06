@@ -33,14 +33,15 @@ AC_PREFIX_DEFAULT(/opt/ltp)
 AC_CHECK_HEADERS([ \
     ifaddrs.h \
     libaio.h \
-    mm.h \
-    pthread.h \
-    sys/xattr.h \
     linux/can.h \
     linux/genetlink.h \
     linux/mempolicy.h \
     linux/module.h \
     linux/netlink.h \
+    mm.h \
+    openssl/sha.h \
+    pthread.h \
+    sys/xattr.h \
     sys/epoll.h \
     sys/inotify.h \
     sys/fanotify.h \
