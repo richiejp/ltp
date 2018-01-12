@@ -45,17 +45,24 @@
 #include <string.h>
 #include <limits.h>
 #include <fnmatch.h>
+#include <semaphore.h>
 
 #include "tst_test.h"
-#include "tst_minmax.h"
 
+#define QUEUE_SIZE 8192
 #define BUFFER_SIZE 1024
 #define MAX_PATH 4096
 
+struct queue {
+	sem_t sem;
+	int front;
+	int back;
+	char data[QUEUE_SIZE];
+};
+
 struct worker {
 	pid_t pid;
-	int in;
-	int out;
+	struct queue *q;
 };
 
 static char *verbose;
@@ -73,6 +80,72 @@ static struct tst_option options[] = {
 	 "-e pattern Ignore files which match an 'extended' pattern, see fnmatch(3)"},
 	{NULL, NULL, NULL}
 };
+
+static int queue_pop(struct queue *q, char *buf)
+{
+	int i = q->front, j = 0;
+
+	sem_wait(&q->sem);
+
+	if (!q->data[i])
+		return 0;
+
+	while (q->data[i]) {
+		buf[j] = q->data[i];
+
+		if (++j >= BUFFER_SIZE - 1)
+			tst_brk(TBROK, "Buffer is too small for path");
+		if (++i >= QUEUE_SIZE)
+			i = 0;
+	}
+
+	buf[j] = '\0';
+	q->front = i + 1;
+
+	return 1;
+}
+
+static int queue_push(struct queue *q, const char *buf)
+{
+	int i = q->back, j = 0;
+
+	while (buf[j]) {
+		q->data[i] = buf[j];
+
+		++j;
+		if (++i >= QUEUE_SIZE)
+			i = 0;
+		if (i == q->front)
+			return 0;
+	}
+	q->data[i] = '\0';
+
+	q->back = i + 1;
+	sem_post(&q->sem);
+
+	return 1;
+}
+
+static struct queue *queue_init(void)
+{
+	struct queue *q = SAFE_MMAP(NULL, sizeof(*q),
+				    PROT_READ | PROT_WRITE,
+				    MAP_SHARED | MAP_ANONYMOUS,
+				    0, 0);
+
+	sem_init(&q->sem, 1, 0);
+	q->front = 0;
+	q->back = 0;
+
+	return q;
+}
+
+static void queue_destroy(struct queue *q, int is_worker)
+{
+	if (is_worker)
+		sem_destroy(&q->sem);
+	SAFE_MUNMAP(q, sizeof(*q));
+}
 
 static void read_test(const char *path)
 {
@@ -118,100 +191,87 @@ static void read_test(const char *path)
 
 static int worker_run(struct worker *self)
 {
-	ssize_t i, j, ret, count;
-	char buf[PIPE_BUF];
+	int ret;
+	char buf[BUFFER_SIZE];
 	struct sigaction term_sa = {
 		.sa_handler = SIG_IGN,
 		.sa_flags = 0,
 	};
+	struct queue *q = self->q;
 
 	sigaction(SIGTTIN, &term_sa, NULL);
 
-	for (count = 0;;) {
-		ret = read(self->in, buf + count, sizeof(buf) - 1 - count);
-		if (ret < 0 && errno == EINTR)
-			continue;
-		else if (ret < 0)
-			tst_res(TBROK | TERRNO,
-				"Worker can not read from pipe");
-		else if (ret == 0)
-			break;
-
-		count += ret;
-
-		for (i = 0, j = 0; i < count; i++) {
-			if (buf[i] == '\n') {
-				buf[i] = '\0';
-				read_test(buf + j);
-				j = i + 1;
-			}
-		}
-
-		count = i - j;
-		memmove(buf, buf + j, count);
-		if (sizeof(buf) - 1 - count < 1)
-			tst_brk(TBROK,
-				"Worker receive buffer is too small for path");
+	for (ret = queue_pop(q, buf); ret; ret = queue_pop(q, buf)) {
+		read_test(buf);
 	}
+
+	queue_destroy(q, 1);
 
 	return 0;
 }
 
 static void spawn_workers(void)
 {
-	int i, j;
-	int pipe[2];
+	int i;
 	struct worker *wa = workers;
 
 	bzero(workers, worker_count * sizeof(*workers));
 
 	for (i = 0; i < worker_count; i++) {
-		SAFE_PIPE(pipe);
-		wa[i].in = pipe[0];
-		wa[i].out = pipe[1];
+		wa[i].q = queue_init();
 		wa[i].pid = SAFE_FORK();
 		if (!wa[i].pid) {
-			for (j = 0; j <= i; j++)
-				SAFE_CLOSE(wa[j].out);
 			exit(worker_run(wa + i));
-		} else {
-			SAFE_CLOSE(wa[i].in);
 		}
 	}
 }
 
 static void stop_workers(void)
 {
+	const char stop_code[1] = { '\0' };
 	int i;
 
-	for (i = 0; workers && i < worker_count; i++) {
-		if (workers[i].out > 0)
-			SAFE_CLOSE(workers[i].out);
+	if (!workers)
+		return;
+
+	for (i = 0; i < worker_count; i++) {
+		if (workers[i].q)
+			queue_push(workers[i].q, stop_code);
+	}
+
+	for (i = 0; i < worker_count; i++) {
+		if (workers[i].q) {
+			queue_destroy(workers[i].q, 0);
+			workers[i].q = 0;
+		}
 	}
 }
 
 static void sched_work(const char *path)
 {
 	static long cur;
+	int push_attempts = 0;
 
-	SAFE_WRITE(1, workers[cur].out, path, strlen(path));
-	cur++;
-	if (cur >= worker_count)
-		cur = 0;
+	while (!queue_push(workers[cur].q, path)) {
+		cur++;
+		push_attempts++;
+		if (cur >= worker_count)
+			cur = 0;
+		if (push_attempts > worker_count)
+			tst_brk(TBROK, "Worker queues are all full");
+	}
 }
 
 static void setup(void)
 {
 	worker_count = MIN(MAX(SAFE_SYSCONF(_SC_NPROCESSORS_ONLN) - 1, 1), 15);
-	workers = (struct worker *)SAFE_MALLOC(worker_count * sizeof(*workers));
+	workers = SAFE_MALLOC(worker_count * sizeof(*workers));
 }
 
 static void cleanup(void)
 {
 	stop_workers();
-
-	if (workers)
-		free(workers);
+	free(workers);
 }
 
 static void visit_dir(const char *path)
@@ -243,7 +303,7 @@ static void visit_dir(const char *path)
 				break;
 			default:
 				snprintf(dent_path, MAX_PATH,
-					 "%s/%s\n", path, dent->d_name);
+					 "%s/%s", path, dent->d_name);
 				sched_work(dent_path);
 			}
 		} else {
@@ -258,7 +318,7 @@ static void visit_dir(const char *path)
 				break;
 			default:
 				snprintf(dent_path, MAX_PATH,
-					 "%s/%s\n", path, dent->d_name);
+					 "%s/%s", path, dent->d_name);
 				sched_work(dent_path);
 			}
 		}
@@ -270,12 +330,11 @@ static void visit_dir(const char *path)
 static void run(void)
 {
 	spawn_workers();
-
 	visit_dir(root_dir);
-	tst_res(TPASS, "Finished scanning directory tree");
-
 	stop_workers();
 
+	tst_reap_children();
+	tst_res(TPASS, "Finished reading files");
 }
 
 static struct tst_test test = {
