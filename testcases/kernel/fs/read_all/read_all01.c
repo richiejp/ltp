@@ -53,6 +53,7 @@
 #define QUEUE_SIZE 16384
 #define BUFFER_SIZE 1024
 #define MAX_PATH 4096
+#define MAX_DISPLAY 40
 
 struct queue {
 	sem_t sem;
@@ -85,7 +86,7 @@ static struct tst_option options[] = {
 	{"e:", &exclude,
 	 "-e pattern Ignore files which match an 'extended' pattern, see fnmatch(3)"},
 	{"r:", &str_repeat,
-	 "-r count The number of times to read each file within one test iteration"},
+	 "-r count The number of times to schedule a file for reading"},
 	{NULL, NULL, NULL}
 };
 
@@ -159,18 +160,15 @@ static void sanitize_str(char *buf, ssize_t count)
 {
 	int i;
 
-	for (i = 0; i < MIN(count, 20); i++) {
+	for (i = 0; i < MIN(count, MAX_DISPLAY); i++) {
 		if (!isprint(buf[i]))
 			buf[i] = ' ';
 	}
 
-	if (count <= 20) {
-		if (buf[count - 1] == '\n')
-			buf[count - 1] = '\0';
-		else
-			buf[count] = '\0';
-	} else
-		strcpy(buf + 20, "...");
+	if (count <= MAX_DISPLAY)
+		buf[count] = '\0';
+	else
+		strcpy(buf + MAX_DISPLAY, "...");
 }
 
 static void read_test(const char *path)
@@ -200,7 +198,6 @@ static void read_test(const char *path)
 		sanitize_str(buf, count);
 		tst_res(TINFO, "read(%s, buf) = %ld, buf = %s",
 			path, count, buf);
-
 	} else if (!count && verbose)
 		tst_res(TINFO, "read(%s) = EOF", path);
 	else if (count < 0 && !quite)
@@ -226,7 +223,8 @@ static int worker_run(struct worker *self)
 	}
 
 	queue_destroy(q, 1);
-
+	fflush(stdout);
+	fsync(STDOUT_FILENO);
 	return 0;
 }
 
@@ -294,6 +292,9 @@ static void setup(void)
 		tst_brk(TBROK,
 			"Invalid repeat (-r) argument: '%s'", str_repeat);
 	}
+	if (!root_dir)
+		tst_brk(TBROK, "The directory argument (-d) is required");
+
 	worker_count = MIN(MAX(SAFE_SYSCONF(_SC_NPROCESSORS_ONLN) - 1, 1), 15);
 	workers = SAFE_MALLOC(worker_count * sizeof(*workers));
 }
