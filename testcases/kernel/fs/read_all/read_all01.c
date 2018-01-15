@@ -46,6 +46,7 @@
 #include <limits.h>
 #include <fnmatch.h>
 #include <semaphore.h>
+#include <ctype.h>
 
 #include "tst_test.h"
 
@@ -154,6 +155,24 @@ static void queue_destroy(struct queue *q, int is_worker)
 	SAFE_MUNMAP(q, sizeof(*q));
 }
 
+static void sanitize_str(char *buf, ssize_t count)
+{
+	int i;
+
+	for (i = 0; i < MIN(count, 20); i++) {
+		if (!isprint(buf[i]))
+			buf[i] = ' ';
+	}
+
+	if (count <= 20) {
+		if (buf[count - 1] == '\n')
+			buf[count - 1] = '\0';
+		else
+			buf[count] = '\0';
+	} else
+		strcpy(buf + 20, "...");
+}
+
 static void read_test(const char *path)
 {
 	char buf[BUFFER_SIZE];
@@ -178,14 +197,7 @@ static void read_test(const char *path)
 
 	count = read(fd, buf, sizeof(buf) - 1);
 	if (count > 0 && verbose) {
-		if (count <= 20) {
-			if (buf[count - 1] == '\n')
-				buf[count - 1] = '\0';
-			else
-				buf[count] = '\0';
-		} else
-			strcpy(buf + 20, "...");
-
+		sanitize_str(buf, count);
 		tst_res(TINFO, "read(%s, buf) = %ld, buf = %s",
 			path, count, buf);
 
@@ -310,33 +322,27 @@ static void visit_dir(const char *path)
 		    !strcmp(dent->d_name, ".."))
 			continue;
 
+		snprintf(dent_path, MAX_PATH,
+			 "%s/%s", path, dent->d_name);
 		if (dent->d_type != DT_UNKNOWN) {
 			switch (dent->d_type) {
 			case DT_DIR:
-				snprintf(dent_path, MAX_PATH,
-					 "%s/%s", path, dent->d_name);
 				visit_dir(dent_path);
 				break;
 			case DT_LNK:
 				break;
 			default:
-				snprintf(dent_path, MAX_PATH,
-					 "%s/%s", path, dent->d_name);
 				sched_work(dent_path);
 			}
 		} else {
 			SAFE_LSTAT(dent_path, &dent_st);
 			switch (dent_st.st_mode & S_IFMT) {
 			case S_IFDIR:
-				snprintf(dent_path, MAX_PATH,
-					 "%s/%s", path, dent->d_name);
 				visit_dir(dent_path);
 				break;
 			case S_IFLNK:
 				break;
 			default:
-				snprintf(dent_path, MAX_PATH,
-					 "%s/%s", path, dent->d_name);
 				sched_work(dent_path);
 			}
 		}
