@@ -28,11 +28,11 @@
  *
  * The reads are preformed by worker processes which are given file paths by a
  * single parent process. The parent process recursively scans a given
- * directory and passes the file paths it finds to the child processes through
- * a pipe. The test will use a maximum of 15 processes, depending on the
- * number of CPU cores available, under the assumption that while parallelism
- * is good we don't want to spend too much time creating processes,
- * distributing data and waiting for locks.
+ * directory and passes the file paths it finds to the child processes using
+ * some shared memory. The test will use a maximum of 15 processes, depending
+ * on the number of CPU cores available, under the assumption that while
+ * parallelism is good we don't want to spend too much time creating
+ * processes, distributing data and waiting for locks.
  *
  */
 #include <sys/types.h>
@@ -49,7 +49,7 @@
 
 #include "tst_test.h"
 
-#define QUEUE_SIZE 8192
+#define QUEUE_SIZE 16384
 #define BUFFER_SIZE 1024
 #define MAX_PATH 4096
 
@@ -66,18 +66,25 @@ struct worker {
 };
 
 static char *verbose;
-static char *root_dir = "/sys";
+static char *quite;
+static char *root_dir;
 static char *exclude;
+static char *str_repeat;
+static int repeat = 1;
 static long worker_count;
 static struct worker *workers;
 
 static struct tst_option options[] = {
 	{"v", &verbose,
 	 "-v       Print information about successful reads"},
+	{"q", &quite,
+	 "-q       Don't print file read or open errors"},
 	{"d:", &root_dir,
 	 "-d path  Path to the directory to read from, defaults to /sys"},
 	{"e:", &exclude,
 	 "-e pattern Ignore files which match an 'extended' pattern, see fnmatch(3)"},
+	{"r:", &str_repeat,
+	 "-r count The number of times to read each file within one test iteration"},
 	{NULL, NULL, NULL}
 };
 
@@ -163,10 +170,11 @@ static void read_test(const char *path)
 		tst_res(TINFO, "%s(%s)", __func__, path);
 
 	fd = open(path, O_RDONLY | O_NONBLOCK);
-	if (fd < 0) {
+	if (fd < 0 && !quite) {
 		tst_res(TINFO | TERRNO, "open(%s)", path);
 		return;
-	}
+	} else if (fd < 0)
+		return;
 
 	count = read(fd, buf, sizeof(buf) - 1);
 	if (count > 0 && verbose) {
@@ -183,7 +191,7 @@ static void read_test(const char *path)
 
 	} else if (!count && verbose)
 		tst_res(TINFO, "read(%s) = EOF", path);
-	else if (count < 0)
+	else if (count < 0 && !quite)
 		tst_res(TINFO | TERRNO, "read(%s)", path);
 
 	SAFE_CLOSE(fd);
@@ -250,20 +258,30 @@ static void stop_workers(void)
 static void sched_work(const char *path)
 {
 	static long cur;
-	int push_attempts = 0;
+	int push_attempts, i;
 
-	while (!queue_push(workers[cur].q, path)) {
-		cur++;
-		push_attempts++;
-		if (cur >= worker_count)
-			cur = 0;
-		if (push_attempts > worker_count)
-			tst_brk(TBROK, "Worker queues are all full");
+	for (i = 0; i < repeat; i++) {
+		push_attempts = 0;
+		while (!queue_push(workers[cur].q, path)) {
+			cur++;
+			push_attempts++;
+			if (cur >= worker_count)
+				cur = 0;
+			if (push_attempts > worker_count) {
+				tst_brk(TINFO, "Worker queues are all full");
+				usleep(100);
+				push_attempts = 0;
+			}
+		}
 	}
 }
 
 static void setup(void)
 {
+	if (tst_parse_int(str_repeat, &repeat, 1, INT_MAX)) {
+		tst_brk(TBROK,
+			"Invalid repeat (-r) argument: '%s'", str_repeat);
+	}
 	worker_count = MIN(MAX(SAFE_SYSCONF(_SC_NPROCESSORS_ONLN) - 1, 1), 15);
 	workers = SAFE_MALLOC(worker_count * sizeof(*workers));
 }
