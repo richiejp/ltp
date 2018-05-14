@@ -52,6 +52,7 @@
 #include <ctype.h>
 
 #include "tst_test.h"
+#include "tst_prctl.h"
 
 #define QUEUE_SIZE 16384
 #define BUFFER_SIZE 1024
@@ -87,6 +88,7 @@ static char *str_worker_count;
 static long worker_count;
 static char *str_max_workers;
 static long max_workers = 15;
+static char *drop_privs;
 static struct worker *workers;
 
 static struct tst_option options[] = {
@@ -104,7 +106,14 @@ static struct tst_option options[] = {
 	 "-w count Set the worker count limit, the default is 15."},
 	{"W:", &str_worker_count,
 	 "-W count Override the worker count. Ignores (-w) and the processor count."},
+	{"p", &drop_privs,
+	 "-p       Drop privileges; useful for reading /dev"},
 	{NULL, NULL, NULL}
+};
+
+static int unwanted_caps[] = {
+	CAP_NET_ADMIN, CAP_NET_RAW,
+	CAP_SYS_RAWIO, CAP_SYS_ADMIN
 };
 
 static int queue_pop(struct queue *q, char *buf)
@@ -317,6 +326,10 @@ static void setup(void)
 
 	if (!worker_count)
 		worker_count = MIN(MAX(tst_ncpus() - 1, 1), max_workers);
+
+	if (drop_privs)
+		tst_drop_caps(unwanted_caps, ARRAY_SIZE(unwanted_caps), 0);
+
 	workers = SAFE_MALLOC(worker_count * sizeof(*workers));
 }
 
