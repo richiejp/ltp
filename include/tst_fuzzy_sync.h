@@ -42,6 +42,7 @@
 #include <time.h>
 #include <math.h>
 #include "tst_atomic.h"
+#include "tst_timer.h"
 
 #ifndef CLOCK_MONOTONIC_RAW
 # define CLOCK_MONOTONIC_RAW CLOCK_MONOTONIC
@@ -63,6 +64,7 @@
  *              Defaults to 0xF and must be of the form $2^n - 1$
  * @info_gap: The number of iterations between printing some statistics.
  *            Defaults to 0x7FFFF and must also be one less than a power of 2.
+ * @total_timeout: How long we should loop for in ms.
  * @a_cntr: Internal; Atomic counter used by fzsync_pair_wait()
  * @b_cntr: Internal; Atomic counter used by fzsync_pair_wait()
  * @exit: Internal; Used by tst_fzsync_pair_exit() and fzsync_pair_wait()
@@ -84,6 +86,7 @@ struct tst_fzsync_pair {
 	long delay_inc;
 	int update_gap;
 	int info_gap;
+	long long total_timeout;
 	int a_cntr;
 	int b_cntr;
 	int exit;
@@ -96,7 +99,8 @@ struct tst_fzsync_pair {
 	.avg_alpha = 0.25,	\
 	.delay_inc = 1,	        \
 	.update_gap = 0xF,	\
-	.info_gap = 0x7FFFF     \
+	.info_gap = 0x7FFFF,	\
+	.total_timeout = 2000   \
 }
 
 /**
@@ -216,6 +220,9 @@ static void tst_fzsync_pair_update(int loop_index, struct tst_fzsync_pair *pair)
 		tst_fzsync_pair_info(pair);
 
 	pair->avg_diff = avg;
+
+	if (tst_timer_expired_ms(pair->total_timeout))
+		tst_atomic_store(1, &pair->exit);
 }
 
 /**
