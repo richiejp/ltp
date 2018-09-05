@@ -32,22 +32,28 @@
 static volatile char seq[LOOPS * 2 + 1];
 static struct tst_fzsync_pair pair = TST_FZSYNC_PAIR_INIT;
 static volatile int seq_n;
-static volatile int iterations;
+
+static void setup(void)
+{
+	pair.exec_loops = LOOPS;
+}
 
 static void *worker(void *v LTP_ATTRIBUTE_UNUSED)
 {
 	unsigned long long i;
 
-	for (i = 0; tst_fzsync_start_race_b(&pair); i++) {
-		if (!tst_fzsync_end_race_b(&pair))
-			break;
+	for (i = 0; tst_fzsync_run_b(&pair); i++) {
+		tst_fzsync_start_race_b(&pair);
+		tst_fzsync_end_race_b(&pair);
 		seq[seq_n] = 'B';
 		seq_n = (i + 1) * 2 % (int)LOOPS * 2;
 	}
 
-	if (i > LOOPS * iterations)
-		tst_res(TWARN, "Worker performed too many iterations: %lld > %lld",
-			i, LOOPS * iterations);
+	if (i != LOOPS) {
+		tst_res(TFAIL,
+			"Worker performed wrong number of iterations: %lld != %lld",
+			i, LOOPS);
+	}
 
 	return NULL;
 }
@@ -57,13 +63,11 @@ static void run(void)
 	unsigned int i, j, fail = 0;
 
 	tst_fzsync_pair_reset(&pair, worker);
-	for (i = 0; i < LOOPS; i++) {
-		if (!tst_fzsync_start_race_a(&pair))
-			break;
+	for (i = 0; tst_fzsync_run_a(&pair); i++) {
+		tst_fzsync_start_race_a(&pair);
 		seq[seq_n] = 'A';
 		seq_n = i * 2 + 1;
-		if (!tst_fzsync_end_race_a(&pair))
-			break;
+		tst_fzsync_end_race_a(&pair);
 	}
 
 	tst_res(TINFO, "Checking sequence...");
@@ -87,8 +91,6 @@ static void run(void)
 
 	if (labs(pair.delay) > 1000)
 		tst_res(TFAIL, "Delay is suspiciously large");
-
-	iterations++;
 }
 
 static void cleanup(void)
@@ -97,6 +99,7 @@ static void cleanup(void)
 }
 
 static struct tst_test test = {
+	.setup = setup,
 	.cleanup = cleanup,
 	.test_all = run,
 };
