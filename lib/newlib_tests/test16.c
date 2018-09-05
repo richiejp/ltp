@@ -30,12 +30,13 @@
 #define LOOPS 0xFFFFFFULL
 
 static volatile char seq[LOOPS * 2 + 1];
-static struct tst_fzsync_pair pair = TST_FZSYNC_PAIR_INIT;
+static struct tst_fzsync_pair pair;
 static volatile int seq_n;
 
 static void setup(void)
 {
 	pair.exec_loops = LOOPS;
+	tst_fzsync_pair_init(&pair);
 }
 
 static void *worker(void *v LTP_ATTRIBUTE_UNUSED)
