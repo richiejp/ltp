@@ -95,6 +95,11 @@ struct tst_fzsync_stat {
  * This contains all the necessary state for approximately synchronising two
  * sections of code in different threads.
  *
+ * Some of the fields can be configured before calling
+ * tst_fzsync_pair_reset(), however this is mainly for debugging purposes. If
+ * a test requires one of the parameters to be modified, we should consider
+ * finding a way of automatically selecting an appropriate value at runtime.
+ *
  * Internal fields should only be accessed by library functions.
  */
 struct tst_fzsync_pair {
@@ -160,20 +165,22 @@ struct tst_fzsync_pair {
 	int b_cntr;
 	/** Internal; Used by tst_fzsync_pair_exit() and fzsync_pair_wait() */
 	int exit;
-	/** Internal; Used to limit the execution time. */
-	struct tst_timer timer;
 	/**
-	 * The maximum time, in seconds, the test loop should be run.
+	 * The maximum desired execution time as a proportion of the timeout
 	 *
-	 * If the test runs for this amount of time without crashing or
-	 * reaching some iteration limit, the wait and race functions will
-	 * return zero signalling that the test loop should end.
+	 * A value x so that 0 < x < 1 which decides how long the test should
+	 * be run for (assuming the loop limit is not exceeded first).
 	 *
-	 * Note that this value is multiplied by LTP_TIMEOUT_MUL.
-	 *
-	 * Defaults to 60 seconds.
+	 * Defaults to 0.2 (~60 seconds with default timeout).
 	 */
-	int exec_time;
+	float exec_time_p;
+	/** Internal; The test time remaining on tst_fzsync_pair_reset() */
+	float exec_time_start;
+	/**
+	 * The maximum number of iterations to execute during the test
+	 *
+	 * Defaults to a large number, but not too large.
+	 */
 	int exec_loops;
 	int exec_loop;
 	/** Internal; The second thread or NULL */
@@ -187,7 +194,7 @@ struct tst_fzsync_pair {
 	.avg_alpha = 0.25,	\
 	.min_samples = 1024,	\
 	.max_dev_ratio = 0.1,	\
-	.exec_time = 60,	\
+	.exec_time_p = 0.2,	\
 	.exec_loops = 1000000	\
 }
 
@@ -248,8 +255,6 @@ static void tst_fzsync_pair_reset(struct tst_fzsync_pair *pair,
 	pair->sampling = pair->min_samples;
 
 	pair->exec_loop = 0;
-	pair->timer.limit =
-		tst_sec_to_timespec(pair->exec_time * tst_timeout_mul());
 
 	pair->a_cntr = 0;
 	pair->b_cntr = 0;
@@ -257,7 +262,7 @@ static void tst_fzsync_pair_reset(struct tst_fzsync_pair *pair,
 	if (run_b)
 		SAFE_PTHREAD_CREATE(&pair->thread_b, 0, run_b, 0);
 
-	tst_timer_start_st(&pair->timer);
+	pair->exec_time_start = (float)tst_timeout_remaining();
 }
 
 /**
@@ -291,7 +296,11 @@ static void tst_fzsync_pair_info(struct tst_fzsync_pair *pair)
 /** Wraps clock_gettime */
 static inline void tst_fzsync_time(struct timespec *t)
 {
+#ifdef CLOCK_MONOTONIC_RAW
 	clock_gettime(CLOCK_MONOTONIC_RAW, t);
+#else
+	clock_gettime(CLOCK_MONOTONIC, t);
+#endif
 }
 
 /**
@@ -524,7 +533,8 @@ static inline int tst_fzsync_run_a(struct tst_fzsync_pair *pair)
 {
 	int exit = 0;
 
-	if (tst_timer_expired_st(&pair->timer)) {
+	if (pair->exec_time_p
+	    < 1 - tst_timeout_remaining() / pair->exec_time_start) {
 		tst_res(TINFO,
 			"Exceeded execution time, requesting exit");
 		exit = 1;
