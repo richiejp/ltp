@@ -28,39 +28,36 @@
  * involving two threads or processes. We refer to the main test thread as
  * thread A and the child thread as thread B.
  *
- * In each thread you need a simple while or for loop which you call the
- * tst_fzsync_* functions in. In the simplest case thread A will look
- * something like:
+ * In each thread you need a simple while- or for-loop which the tst_fzsync_*
+ * functions are called in. In the simplest case thread A will look something
+ * like:
  *
  * tst_fzsync_pair_reset(&pair, run_thread_b);
- * for (;;) {
+ * while (tst_fzsync_run_a(&pair)) {
  * 	// Perform some setup which must happen before the race
- * 	if (!tst_fzsync_start_race_a(&pair))
- * 		break;
+ * 	tst_fzsync_start_race_a(&pair);
  * 	// Do some dodgy syscall
  * 	tst_fzsync_end_race_a(&pair);
  * }
  *
  * Then in thread B (run_thread_b):
  *
- * while (tst_fzsync_start_race_b(&pair)) {
+ * while (tst_fzsync_run_b(&pair)) {
+ *      tst_fzsync_start_race_b(&pair);
  * 	// Do something which can race with the dodgy syscall in A
- * 	if (!tst_fzsync_end_race_b(&pair))
- * 		break;
+ * 	tst_fzsync_end_race_b(&pair)
  * }
  *
- * The calls to tst_fzsync_start/end_race act as barriers which niether thread
- * will cross until the other has reached it. You can add more barriers by
- * using tst_fzsync_wait_a() and tst_fzsync_wait_b() in each thread.
+ * The calls to tst_fzsync_start/end_race and tst_fzsync_run_a/b block (at
+ * least) until both threads have enter them. These functions can only be
+ * called once for each iteration, but further sychronisation points can be
+ * added by calling tst_fzsync_wait_a() and tst_fzsync_wait_b() in each
+ * thread.
  *
- * You may limit the loop in thread A to a certain number of loops or just
- * allow fzsync to timeout. This is 60 seconds by default, but you can change
- * it by setting tst_fzsync_pair::execution_time before calling
- * tst_fzsync_pair_reset().
- *
- * Generally speaking whatever loop or time limit you choose it will be wrong
- * on some subset of systems supported by Linux, but a best guess, based on
- * whatever systems you have access to, should suffice.
+ * The execution of the loops in threads A and B are bounded by both iteration
+ * count and time. A slow machine is likely to be limited by time and a fast
+ * one by iteration count. The user can use the -i parameter to run the test
+ * multiple times or LTP_TIMEOUT_MUL to give the test more time.
  *
  * It is possible to use the library just for tst_fzsync_pair_wait() to get a
  * basic spin wait. However if you are actually testing a race condition then
@@ -187,17 +184,24 @@ struct tst_fzsync_pair {
 	pthread_t thread_b;
 };
 
+#define CHK(param, low, hi, def) \
+	pair->param = (pair->param ? pair->param : def); \
+	if (pair->param <= low) \
+		tst_brk(TBROK, #param " is less than the lower bound " #low); \
+	if (pair->param >= hi) \
+		tst_brk(TBROK, #param " is more than the upper bound " #hi);
 /**
  * Default static values for struct tst_fzysnc_pair
  */
-#define TST_FZSYNC_PAIR_INIT {	\
-	.avg_alpha = 0.25,	\
-	.min_samples = 1024,	\
-	.max_dev_ratio = 0.1,	\
-	.exec_time_p = 0.2,	\
-	.exec_loops = 1000000	\
+static void tst_fzsync_pair_init(struct tst_fzsync_pair *pair)
+{
+	CHK(avg_alpha, 0, 1, 0.25);
+	CHK(min_samples, 20, INT_MAX, 1024);
+	CHK(max_dev_ratio, 0, 1, 0.1);
+	CHK(exec_time_p, 0, 1, 0.2);
+	CHK(exec_loops, 20, INT_MAX, 10000000);
 }
-
+#undef CHK
 /**
  * Exit and join thread B if necessary.
  *
