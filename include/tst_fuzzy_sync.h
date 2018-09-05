@@ -421,8 +421,8 @@ static void tst_fzsync_pair_update(struct tst_fzsync_pair *pair)
 				dev_ratio);
 			tst_fzsync_pair_info(pair);
 		}
-	} else if (pair->diff_ab.avg >= 1 && pair->spins_avg.avg >= 1) {
-		per_spin_time = fabs(pair->diff_ab.avg) / pair->spins_avg.avg;
+	} else if (fabsf(pair->diff_ab.avg) >= 1 && pair->spins_avg.avg >= 1) {
+		per_spin_time = fabsf(pair->diff_ab.avg) / pair->spins_avg.avg;
 		time_delay = drand48() * (pair->diff_sa.avg + pair->diff_sb.avg)
 			- pair->diff_sb.avg;
 		pair->delay = (int)(time_delay / per_spin_time);
@@ -530,7 +530,7 @@ static inline int tst_fzsync_run_a(struct tst_fzsync_pair *pair)
 		exit = 1;
 	}
 
-	if (pair->exec_loop++ > pair->exec_loops) {
+	if (++pair->exec_loop > pair->exec_loops) {
 		tst_res(TINFO,
 			"Exceeded execution loops, requesting exit");
 		exit = 1;
@@ -550,7 +550,7 @@ static inline int tst_fzsync_run_a(struct tst_fzsync_pair *pair)
 static inline int tst_fzsync_run_b(struct tst_fzsync_pair *pair)
 {
 	tst_fzsync_wait_b(pair);
-	return tst_atomic_load(&pair->exit);
+	return !tst_atomic_load(&pair->exit);
 }
 
 /**
