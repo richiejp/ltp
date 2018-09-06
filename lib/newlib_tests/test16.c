@@ -32,6 +32,7 @@
 static volatile char seq[LOOPS * 2 + 1];
 static struct tst_fzsync_pair pair;
 static volatile int seq_n;
+static volatile char last_wins;
 
 static void setup(void)
 {
@@ -46,6 +47,7 @@ static void *worker(void *v LTP_ATTRIBUTE_UNUSED)
 	for (i = 0; tst_fzsync_run_b(&pair); i++) {
 		tst_fzsync_start_race_b(&pair);
 		usleep(1);
+		last_wins = 'B';
 		tst_fzsync_end_race_b(&pair);
 		seq[seq_n] = 'B';
 		seq_n = (i + 1) * 2 % (int)LOOPS * 2;
@@ -62,14 +64,17 @@ static void *worker(void *v LTP_ATTRIBUTE_UNUSED)
 
 static void run(void)
 {
-	unsigned int i, j, fail = 0;
+	unsigned int i, j, fail = 0, lost_race = 0;
 
 	tst_fzsync_pair_reset(&pair, worker);
 	for (i = 0; tst_fzsync_run_a(&pair); i++) {
 		tst_fzsync_start_race_a(&pair);
 		seq[seq_n] = 'A';
 		seq_n = i * 2 + 1;
+		last_wins = 'A';
 		tst_fzsync_end_race_a(&pair);
+		if (last_wins == 'B')
+			lost_race++;
 	}
 
 	tst_res(TINFO, "Checking sequence...");
@@ -91,8 +96,10 @@ static void run(void)
 	if (!fail)
 		tst_res(TPASS, "Sequence is correct");
 
-	if (labs(pair.delay) > 300000)
-		tst_res(TFAIL, "Delay is suspiciously large");
+	if (lost_race < 100)
+		tst_res(TFAIL, "A only lost the race %d times", lost_race);
+	else
+		tst_res(TPASS, "A lost the race %d times", lost_race);
 }
 
 static void cleanup(void)
