@@ -32,7 +32,7 @@
 #include "tst_safe_sysv_ipc.h"
 #include "tst_timer.h"
 
-static struct tst_fzsync_pair fzsync_pair = TST_FZSYNC_PAIR_INIT;
+static struct tst_fzsync_pair fzsync_pair;
 
 /*
  * Thread 2: repeatedly remove the shm ID and reallocate it again for a
@@ -42,21 +42,22 @@ static void *thrproc(void *unused)
 {
 	int id = SAFE_SHMGET(0xF00F, 4096, IPC_CREAT|0700);
 
-	while (tst_fzsync_start_race_b(&fzsync_pair)) {
+	while (tst_fzsync_run_b(&fzsync_pair)) {
+		tst_fzsync_start_race_b(&fzsync_pair);
 		SAFE_SHMCTL(id, IPC_RMID, NULL);
 		id = SAFE_SHMGET(0xF00F, 4096, IPC_CREAT|0700);
-		if (!tst_fzsync_end_race_b(&fzsync_pair))
-			break;
+		tst_fzsync_end_race_b(&fzsync_pair);
 	}
 	return unused;
 }
 
 static void setup(void)
 {
-	fzsync_pair.execution_time = 5;
 	/* Skip test if either remap_file_pages() or SysV IPC is unavailable */
 	tst_syscall(__NR_remap_file_pages, NULL, 0, 0, 0, 0);
 	tst_syscall(__NR_shmctl, 0xF00F, IPC_RMID, NULL);
+
+	tst_fzsync_pair_init(&fzsync_pair);
 }
 
 static void do_test(void)
@@ -66,25 +67,24 @@ static void do_test(void)
 	 * seems to have been removed by the other process.
 	 */
 	tst_fzsync_pair_reset(&fzsync_pair, thrproc);
-	for (;;) {
+	while (tst_fzsync_run_a(&fzsync_pair)) {
 		int id;
 		void *addr;
 
 		id = SAFE_SHMGET(0xF00F, 4096, IPC_CREAT|0700);
 		addr = SAFE_SHMAT(id, NULL, 0);
-		if (!tst_fzsync_start_race_a(&fzsync_pair))
-			break;
+		tst_fzsync_start_race_a(&fzsync_pair);
 		do {
 			/* This is the system call that crashed */
 			TEST(syscall(__NR_remap_file_pages, addr, 4096,
 				     0, 0, 0));
 		} while (TST_RET == 0);
+		tst_fzsync_end_race_a(&fzsync_pair);
 
 		if (TST_ERR != EIDRM && TST_ERR != EINVAL) {
 			tst_brk(TBROK | TTERRNO,
 				"Unexpected remap_file_pages() error");
 		}
-		tst_fzsync_end_race_a(&fzsync_pair);
 
 		/*
 		 * Ensure that a shm segment will actually be destroyed.
