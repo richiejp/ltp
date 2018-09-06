@@ -27,7 +27,7 @@
 #include "tst_fuzzy_sync.h"
 
 /* LOOPS * 2 + 1 must be less than INT_MAX */
-#define LOOPS 0xFFFFFFULL
+#define LOOPS 0xFFFFULL
 
 static volatile char seq[LOOPS * 2 + 1];
 static struct tst_fzsync_pair pair;
@@ -45,6 +45,7 @@ static void *worker(void *v LTP_ATTRIBUTE_UNUSED)
 
 	for (i = 0; tst_fzsync_run_b(&pair); i++) {
 		tst_fzsync_start_race_b(&pair);
+		usleep(1);
 		tst_fzsync_end_race_b(&pair);
 		seq[seq_n] = 'B';
 		seq_n = (i + 1) * 2 % (int)LOOPS * 2;
@@ -90,7 +91,7 @@ static void run(void)
 	if (!fail)
 		tst_res(TPASS, "Sequence is correct");
 
-	if (labs(pair.delay) > 1000)
+	if (labs(pair.delay) > 300000)
 		tst_res(TFAIL, "Delay is suspiciously large");
 }
 
