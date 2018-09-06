@@ -179,6 +179,7 @@ struct tst_fzsync_pair {
 	 * Defaults to a large number, but not too large.
 	 */
 	int exec_loops;
+	/** Internal; The current loop index  */
 	int exec_loop;
 	/** Internal; The second thread or NULL */
 	pthread_t thread_b;
@@ -191,7 +192,14 @@ struct tst_fzsync_pair {
 	if (pair->param >= hi) \
 		tst_brk(TBROK, #param " is more than the upper bound " #hi);
 /**
- * Default static values for struct tst_fzysnc_pair
+ * Ensures that any Fuzzy Sync parameters are properly set
+ *
+ * @relates tst_fzsync_pair
+ *
+ * Usually called from the setup function, it sets default parameter values or
+ * validates any existing non-defaults.
+ *
+ * @sa tst_fzsync_pair_reset()
  */
 static void tst_fzsync_pair_init(struct tst_fzsync_pair *pair)
 {
@@ -202,6 +210,7 @@ static void tst_fzsync_pair_init(struct tst_fzsync_pair *pair)
 	CHK(exec_loops, 20, INT_MAX, 10000000);
 }
 #undef CHK
+
 /**
  * Exit and join thread B if necessary.
  *
@@ -237,13 +246,15 @@ static void tst_init_stat(struct tst_fzsync_stat *s)
  * @param run_b The function defining thread B or NULL.
  *
  * Call this from your main test function (thread A), just before entering the
- * main loop. It will setup any values needed by fzsync and (re)start thread B
- * using the function provided.
+ * main loop. It will (re)set any variables needed by fzsync and (re)start
+ * thread B using the function provided.
  *
  * If you need to use fork or clone to start the second thread/process then
  * you can pass NULL to run_b and handle starting and stopping thread B
  * yourself. You may need to place tst_fzsync_pair in some shared memory as
  * well.
+ *
+ * @sa tst_fzsync_pair_init()
  */
 static void tst_fzsync_pair_reset(struct tst_fzsync_pair *pair,
 				  void *(*run_b)(void *))
@@ -406,6 +417,36 @@ static inline void tst_upd_diff_stat(struct tst_fzsync_stat *s,
  * range. Because the delay range may be too large for a linear search, we use
  * an evenly distributed random function to pick a value from it.
  *
+ * The delay range goes from positive to negative. A negative delay will delay
+ * thread A and and positive one will delay thread B. The range is bounded by
+ * the point where the entry code to Syscall A is synchronised with the exit
+ * to Syscall B and the entry code to Syscall B is synchronised with the exit
+ * of A.
+ *
+ * In order to calculate the lower bound (the max delay of A) we can simply
+ * negate the execution time of Syscall B and convert it to a spin count. For
+ * the upper bound (the max delay of B), we just take the execution time of A
+ * and convert it to a spin count.
+ *
+ * In order to calculate spin count we need to know approximately how long a
+ * spin takes and devide the delay time with it. We find this by first
+ * counting how many spins one thread spends waiting for the other during
+ * end_race[1]. We also know when each syscall exits so we can take the
+ * difference between the exit times and divde it with the number of spins
+ * spent waiting.
+ *
+ * All the times and counts we use in the calculation are averaged over a
+ * variable number of iterations. There is an initial sampling period where we
+ * simply collect time and count samples then caculate their averages. When a
+ * minimum number of samples have been collected, and if the average deviation
+ * is below some proportion of the average sample magnitude, then the sampling
+ * period is ended. On all further iterations a random delay is calculated and
+ * applied, but the averages are not updated.
+ *
+ * [1] This assumes there is always a significant difference. The algorithm
+ * may fail to introduce a delay (when one is needed) in situations where
+ * Syscall A and B finish at approximately the same time.
+ *
  * @relates tst_fzsync_pair
  */
 static void tst_fzsync_pair_update(struct tst_fzsync_pair *pair)
@@ -533,6 +574,17 @@ static inline void tst_fzsync_wait_b(struct tst_fzsync_pair *pair)
 	tst_fzsync_pair_wait(&pair->b_cntr, &pair->a_cntr, NULL);
 }
 
+/**
+ * Decide whether to continue running thread A
+ *
+ * @relates tst_fzsync_pair
+ *
+ * Checks some values and decides whether it is time to break the loop of
+ * thread A.
+ *
+ * @return True to continue and false to break.
+ * @sa tst_fzsync_run_a
+ */
 static inline int tst_fzsync_run_a(struct tst_fzsync_pair *pair)
 {
 	int exit = 0;
@@ -561,6 +613,12 @@ static inline int tst_fzsync_run_a(struct tst_fzsync_pair *pair)
 	return 1;
 }
 
+/**
+ * Decide whether to continue running thread B
+ *
+ * @relates tst_fzsync_pair
+ * @sa tst_fzsync_run_a
+ */
 static inline int tst_fzsync_run_b(struct tst_fzsync_pair *pair)
 {
 	tst_fzsync_wait_b(pair);
