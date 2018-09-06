@@ -168,7 +168,7 @@ struct tst_fzsync_pair {
 	 * A value x so that 0 < x < 1 which decides how long the test should
 	 * be run for (assuming the loop limit is not exceeded first).
 	 *
-	 * Defaults to 0.2 (~60 seconds with default timeout).
+	 * Defaults to 0.1 (~30 seconds with default timeout).
 	 */
 	float exec_time_p;
 	/** Internal; The test time remaining on tst_fzsync_pair_reset() */
@@ -207,7 +207,7 @@ static void tst_fzsync_pair_init(struct tst_fzsync_pair *pair)
 	CHK(min_samples, 20, INT_MAX, 1024);
 	CHK(max_dev_ratio, 0, 1, 0.1);
 	CHK(exec_time_p, 0, 1, 0.2);
-	CHK(exec_loops, 20, INT_MAX, 10000000);
+	CHK(exec_loops, 20, INT_MAX, 1000000);
 }
 #undef CHK
 
