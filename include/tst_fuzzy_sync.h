@@ -288,7 +288,7 @@ static void tst_fzsync_pair_reset(struct tst_fzsync_pair *pair,
 
 	pair->a_cntr = 0;
 	pair->b_cntr = 0;
-	tst_atomic_store(0, &pair->exit);
+	pair->exit = 0;
 	if (run_b)
 		SAFE_PTHREAD_CREATE(&pair->thread_b, 0, run_b, 0);
 
