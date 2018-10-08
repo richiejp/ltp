@@ -21,7 +21,7 @@
  *
  * This library is intended to help reproduce race conditions by synchronising
  * two threads at a given place by marking the range a race may occur
- * in. Because the exact place where any race occurs is whithin the kernel,
+ * in. Because the exact place where any race occurs is within the kernel,
  * and therefor impossible to mark accurately, the library may add randomised
  * delays to either thread in order to help find the exact race timing.
  *
@@ -138,7 +138,7 @@ struct tst_fzsync_pair {
 	 *  Internal; The number of samples left or the sampling state.
 	 *
 	 *  A positive value is the number of remaining mandatory
-	 *  samples. Zero or a negative indicate ssome other state.
+	 *  samples. Zero or a negative indicate some other state.
 	 */
 	int sampling;
 	/**
@@ -429,13 +429,13 @@ static inline void tst_upd_diff_stat(struct tst_fzsync_stat *s,
  * calculated once the average relative deviation has dropped below some
  * percentage of the total time.
  *
- * The delay range is choosen so that any point in Syscall A could be
+ * The delay range is chosen so that any point in Syscall A could be
  * synchronised with any point in Syscall B using a value from the
  * range. Because the delay range may be too large for a linear search, we use
  * an evenly distributed random function to pick a value from it.
  *
  * The delay range goes from positive to negative. A negative delay will delay
- * thread A and and positive one will delay thread B. The range is bounded by
+ * thread A and a positive one will delay thread B. The range is bounded by
  * the point where the entry code to Syscall A is synchronised with the exit
  * to Syscall B and the entry code to Syscall B is synchronised with the exit
  * of A.
@@ -446,15 +446,15 @@ static inline void tst_upd_diff_stat(struct tst_fzsync_stat *s,
  * and convert it to a spin count.
  *
  * In order to calculate spin count we need to know approximately how long a
- * spin takes and devide the delay time with it. We find this by first
+ * spin takes and divide the delay time with it. We find this by first
  * counting how many spins one thread spends waiting for the other during
  * end_race[1]. We also know when each syscall exits so we can take the
- * difference between the exit times and divde it with the number of spins
+ * difference between the exit times and divide it with the number of spins
  * spent waiting.
  *
  * All the times and counts we use in the calculation are averaged over a
  * variable number of iterations. There is an initial sampling period where we
- * simply collect time and count samples then caculate their averages. When a
+ * simply collect time and count samples then calculate their averages. When a
  * minimum number of samples have been collected, and if the average deviation
  * is below some proportion of the average sample magnitude, then the sampling
  * period is ended. On all further iterations a random delay is calculated and
