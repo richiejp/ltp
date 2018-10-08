@@ -195,9 +195,9 @@ struct tst_fzsync_pair {
 
 #define CHK(param, low, hi, def) do {					      \
 	pair->param = (pair->param ? pair->param : def);		      \
-	if (pair->param <= low)						      \
+	if (pair->param < low)						      \
 		tst_brk(TBROK, #param " is less than the lower bound " #low); \
-	if (pair->param >= hi)						      \
+	if (pair->param > hi)						      \
 		tst_brk(TBROK, #param " is more than the upper bound " #hi);  \
 	} while (0)
 /**
