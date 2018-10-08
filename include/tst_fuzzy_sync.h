@@ -231,7 +231,7 @@ static void tst_fzsync_pair_cleanup(struct tst_fzsync_pair *pair)
 {
 	if (pair->thread_b) {
 		tst_atomic_store(1, &pair->exit);
-		SAFE_PTHREAD_JOIN(pair->thread_b, 0);
+		SAFE_PTHREAD_JOIN(pair->thread_b, NULL);
 		pair->thread_b = 0;
 	}
 }
