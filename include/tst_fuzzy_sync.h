@@ -133,7 +133,6 @@ struct tst_fzsync_pair {
 	 */
 	int delay;
 	int delay_bias;
-	int discard_flag;
 	/**
 	 *  Internal; The number of samples left or the sampling state.
 	 *
@@ -478,13 +477,7 @@ static void tst_fzsync_pair_update(struct tst_fzsync_pair *pair)
 		     + pair->diff_ab.dev_ratio
 		     + pair->spins_avg.dev_ratio) / 4;
 
-	if (pair->sampling > 0 && pair->discard_flag) {
-		tst_fzsync_pair_reset_stats(pair);
-		pair->discard_flag = 0;
-		pair->sampling += 20;
-		if (pair->exec_loops <= INT_MAX)
-			pair->exec_loops++;
-	} else if (pair->sampling > 0 || dev_ratio > pair->max_dev_ratio) {
+	if (pair->sampling > 0 || dev_ratio > pair->max_dev_ratio) {
 		tst_upd_diff_stat(&pair->diff_ss, alpha,
 				  pair->a_start, pair->b_start);
 		tst_upd_diff_stat(&pair->diff_sa, alpha,
@@ -752,8 +745,6 @@ static inline void tst_fzsync_end_race_b(struct tst_fzsync_pair *pair)
  */
 static inline void tst_fzsync_pair_add_bias(struct tst_fzsync_pair *pair, int change)
 {
-	if (pair->sampling > 0) {
+	if (pair->sampling > 0)
 		pair->delay_bias += change;
-		pair->discard_flag = 1;
-	}
 }
