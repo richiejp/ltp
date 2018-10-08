@@ -750,8 +750,7 @@ static inline void tst_fzsync_end_race_b(struct tst_fzsync_pair *pair)
  * heuristic of whether recvmmsg() returns EBADF, to decide if it should call
  * tst_fzsync_pair_add_bias() to further delay syscall B.
  */
-LTP_ATTRIBUTE_UNUSED
-static void tst_fzsync_pair_add_bias(struct tst_fzsync_pair *pair, int change)
+static inline void tst_fzsync_pair_add_bias(struct tst_fzsync_pair *pair, int change)
 {
 	if (pair->sampling > 0) {
 		pair->delay_bias += change;
