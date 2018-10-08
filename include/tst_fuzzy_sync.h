@@ -215,7 +215,7 @@ static void tst_fzsync_pair_init(struct tst_fzsync_pair *pair)
 	CHK(avg_alpha, 0, 1, 0.25);
 	CHK(min_samples, 20, INT_MAX, 1024);
 	CHK(max_dev_ratio, 0, 1, 0.1);
-	CHK(exec_time_p, 0, 1, 0.2);
+	CHK(exec_time_p, 0, 1, 0.1);
 	CHK(exec_loops, 20, INT_MAX, 1000000);
 }
 #undef CHK
