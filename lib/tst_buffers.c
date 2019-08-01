@@ -11,10 +11,37 @@
 struct map {
 	void *addr;
 	size_t size;
+	size_t buf_shift;
 	struct map *next;
 };
 
 static struct map *maps;
+
+static void setup_canary(struct map *map)
+{
+	size_t i;
+	char *buf = map->addr;
+
+	for (i = 0; i < map->buf_shift/2; i++) {
+		char c = random();
+		buf[map->buf_shift - i - 1] = c;
+		buf[i] = c;
+	}
+}
+
+static void check_canary(struct map *map)
+{
+	size_t i;
+	char *buf = map->addr;
+
+	for (i = 0; i < map->buf_shift/2; i++) {
+		if (buf[map->buf_shift - i - 1] != buf[i]) {
+			tst_res(TWARN,
+				"pid %i: buffer modified before address %p %zu",
+				(char*)map->addr + map->buf_shift, i);
+		}
+	}
+}
 
 void *tst_alloc(size_t size)
 {
@@ -34,9 +61,13 @@ void *tst_alloc(size_t size)
 	maps = map;
 
 	if (size % page_size)
-		ret += page_size - (size % page_size);
+		map->buf_shift = page_size - (size % page_size);
+	else
+		map->buf_shift = 0;
 
-	return ret;
+	setup_canary(map);
+
+	return ret + map->buf_shift;
 }
 
 static int count_iovec(int *sizes)
@@ -97,6 +128,7 @@ void tst_free_all(void)
 	while (i) {
 		struct map *j = i;
 		tst_res(TINFO, "Freeing %p %zu", i->addr, i->size);
+		check_canary(i);
 		SAFE_MUNMAP(i->addr, i->size);
 		i = i->next;
 		free(j);
