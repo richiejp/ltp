@@ -38,7 +38,7 @@ static void check_canary(struct map *map)
 		if (buf[map->buf_shift - i - 1] != buf[i]) {
 			tst_res(TWARN,
 				"pid %i: buffer modified before address %p %zu",
-				(char*)map->addr + map->buf_shift, i);
+				getpid(), (char*)map->addr + map->buf_shift, i);
 		}
 	}
 }
