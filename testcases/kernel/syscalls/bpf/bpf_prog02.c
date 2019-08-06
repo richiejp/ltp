@@ -8,7 +8,8 @@
  *
  * https://new.blog.cloudflare.com/ebpf-cant-count/
  *
- * This test is very similar in structure to bpf_prog01.
+ * This test is very similar in structure to bpf_prog01 which is better
+ * annotated.
  */
 
 #include <limits.h>
@@ -20,15 +21,20 @@
 #include "lapi/socket.h"
 #include "lapi/bpf.h"
 
-const uint64_t A64INT = 2ULL << 31;
+#define A64INT (((uint64_t)1) << 31)
 
-static int map_fd, prog_fd;
-static int sk[2];
+const char MSG[] = "Ahoj!";
+static char *msg;
+
+static char *log;
+static uint32_t *key;
+static uint64_t *val;
+static union bpf_attr *attr;
 
 int load_prog(int fd)
 {
-	char log_buf[BUFSIZ + 1] = { 0 };
-	struct bpf_insn prog[] = {
+	struct bpf_insn *prog;
+	struct bpf_insn insn[] = {
 		BPF_MOV64_IMM(BPF_REG_6, 1),            /* r6 = 1 */
 
 		BPF_LD_MAP_FD(BPF_REG_1, fd),	        /* r1 = &fd */
@@ -56,21 +62,25 @@ int load_prog(int fd)
 		BPF_MOV64_IMM(BPF_REG_0, 0),            /* r0 = 0 */
 		BPF_EXIT_INSN(),		        /* return r0 */
 	};
-	union bpf_attr attr = { 0 };
 
-	attr.prog_type = BPF_PROG_TYPE_SOCKET_FILTER;
-	attr.insns = ptr_to_u64(prog);
-	attr.insn_cnt = ARRAY_SIZE(prog);
-	attr.license = ptr_to_u64("GPL");
-	attr.log_buf = ptr_to_u64(log_buf);
-	attr.log_size = BUFSIZ;
-	attr.log_level = 1;
+	/* Leaks memory when -i is specified */
+	prog = tst_alloc(sizeof(insn));
+	memcpy(prog, insn, sizeof(insn));
 
-	TEST(bpf(BPF_PROG_LOAD, &attr, sizeof(attr)));
+	memset(attr, 0, sizeof(*attr));
+	attr->prog_type = BPF_PROG_TYPE_SOCKET_FILTER;
+	attr->insns = ptr_to_u64(prog);
+	attr->insn_cnt = ARRAY_SIZE(insn);
+	attr->license = ptr_to_u64("GPL");
+	attr->log_buf = ptr_to_u64(log);
+	attr->log_size = BUFSIZ;
+	attr->log_level = 1;
+
+	TEST(bpf(BPF_PROG_LOAD, attr, sizeof(*attr)));
 	if (TST_RET == -1) {
-		if (log_buf[0] != 0) {
+		if (log[0] != 0) {
 			tst_res(TINFO, "Verification log:");
-			fputs(log_buf, stderr);
+			fputs(log, stderr);
 			tst_brk(TBROK | TTERRNO, "Failed verification");
 		} else {
 			tst_brk(TBROK | TTERRNO, "Failed to load program");
@@ -80,20 +90,23 @@ int load_prog(int fd)
 	return TST_RET;
 }
 
+void setup(void)
+{
+	memcpy(msg, MSG, sizeof(MSG));
+}
+
 void run(void)
 {
-	uint32_t key = 0;
-	uint64_t val;
-	char buf[5];
-	union bpf_attr attr;
+	int map_fd, prog_fd;
+	int sk[2];
 
-	memset(&attr, 0, sizeof(attr));
-	attr.map_type = BPF_MAP_TYPE_ARRAY;
-	attr.key_size = 4;
-	attr.value_size = 8;
-	attr.max_entries = 2;
+	memset(attr, 0, sizeof(*attr));
+	attr->map_type = BPF_MAP_TYPE_ARRAY;
+	attr->key_size = 4;
+	attr->value_size = 8;
+	attr->max_entries = 2;
 
-	TEST(bpf(BPF_MAP_CREATE, &attr, sizeof(attr)));
+	TEST(bpf(BPF_MAP_CREATE, attr, sizeof(*attr)));
 	if (TST_RET == -1) {
 		if (TST_ERR == EPERM) {
 			tst_brk(TCONF | TTERRNO,
@@ -110,33 +123,34 @@ void run(void)
 	SAFE_SETSOCKOPT(sk[1], SOL_SOCKET, SO_ATTACH_BPF,
 			&prog_fd, sizeof(prog_fd));
 
-	SAFE_WRITE(1, sk[0], "Ahoj!", sizeof(buf));
+	SAFE_WRITE(1, sk[0], msg, sizeof(MSG));
 
-	memset(&attr, 0, sizeof(attr));
-	attr.map_fd = map_fd;
-	attr.key = ptr_to_u64(&key);
-	attr.value = ptr_to_u64(&val);
+	memset(attr, 0, sizeof(*attr));
+	attr->map_fd = map_fd;
+	attr->key = ptr_to_u64(key);
+	attr->value = ptr_to_u64(val);
+	*key = 0;
 
-	TEST(bpf(BPF_MAP_LOOKUP_ELEM, &attr, sizeof(attr)));
+	TEST(bpf(BPF_MAP_LOOKUP_ELEM, attr, sizeof(*attr)));
 	if (TST_RET == -1) {
 		tst_res(TFAIL | TTERRNO, "array map lookup");
-	} else if (val != A64INT + 1) {
+	} else if (*val != A64INT + 1) {
 		tst_res(TFAIL,
 			"val = %lu, but should be val = %lu + 1",
-			val, A64INT);
+			*val, A64INT);
         } else {
 	        tst_res(TPASS, "val = %lu + 1", A64INT);
 	}
 
-	key = 1;
+	*key = 1;
 
-	TEST(bpf(BPF_MAP_LOOKUP_ELEM, &attr, sizeof(attr)));
+	TEST(bpf(BPF_MAP_LOOKUP_ELEM, attr, sizeof(*attr)));
 	if (TST_RET == -1) {
 		tst_res(TFAIL | TTERRNO, "array map lookup");
-	} else if (val != A64INT - 1) {
+	} else if (*val != A64INT - 1) {
 		tst_res(TFAIL,
 			"val = %lu, but should be val = %lu - 1",
-			val, A64INT);
+			*val, A64INT);
         } else {
 	        tst_res(TPASS, "val = %lu - 1", A64INT);
 	}
@@ -148,6 +162,15 @@ void run(void)
 }
 
 static struct tst_test test = {
+	.setup = setup,
 	.test_all = run,
 	.min_kver = "3.18",
+	.bufs = (struct tst_buffers []) {
+		{&key, .size = sizeof(*key)},
+		{&val, .size = sizeof(*val)},
+		{&log, .size = BUFSIZ},
+		{&attr, .size = sizeof(*attr)},
+		{&msg, .size = sizeof(MSG)},
+		{NULL},
+	}
 };
