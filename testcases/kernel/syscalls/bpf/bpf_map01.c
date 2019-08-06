@@ -30,28 +30,19 @@ static const struct map_type map_types[] = {
 static void *key;
 static void *val0;
 static void *val1;
-
-static void setup(void)
-{
-	key = SAFE_MALLOC(KEY_SZ);
-	memset(key, 0, (size_t) KEY_SZ);
-	val0 = SAFE_MALLOC(VAL_SZ);
-	val1 = SAFE_MALLOC(VAL_SZ);
-	memset(val1, 0, (size_t) VAL_SZ);
-}
+static union bpf_attr *attr;
 
 void run(unsigned int n)
 {
 	int fd, i;
-	union bpf_attr attr;
 
-	memset(&attr, 0, sizeof(attr));
-	attr.map_type = map_types[n].id;
-	attr.key_size = n == 0 ? KEY_SZ : 4;
-	attr.value_size = VAL_SZ;
-	attr.max_entries = 1;
+	memset(attr, 0, sizeof(*attr));
+	attr->map_type = map_types[n].id;
+	attr->key_size = n == 0 ? KEY_SZ : 4;
+	attr->value_size = VAL_SZ;
+	attr->max_entries = 1;
 
-	TEST(bpf(BPF_MAP_CREATE, &attr, sizeof(attr)));
+	TEST(bpf(BPF_MAP_CREATE, attr, sizeof(*attr)));
 	if (TST_RET == -1) {
 		if (TST_ERR == EPERM) {
 			tst_brk(TCONF | TTERRNO,
@@ -69,12 +60,12 @@ void run(unsigned int n)
 	else
 		memset(key, 0, 4);
 
-	memset(&attr, 0, sizeof(attr));
-	attr.map_fd = fd;
-	attr.key = ptr_to_u64(key);
-	attr.value = ptr_to_u64(val1);
+	memset(attr, 0, sizeof(*attr));
+	attr->map_fd = fd;
+	attr->key = ptr_to_u64(key);
+	attr->value = ptr_to_u64(val1);
 
-	TEST(bpf(BPF_MAP_LOOKUP_ELEM, &attr, sizeof(attr)));
+	TEST(bpf(BPF_MAP_LOOKUP_ELEM, attr, sizeof(*attr)));
 	if (n == 0) {
 		if (TST_RET != -1 || TST_ERR != ENOENT) {
 			tst_res(TFAIL | TTERRNO,
@@ -97,13 +88,13 @@ void run(unsigned int n)
 		tst_res(TFAIL | TERRNO, "Prellocated array map lookup");
 	}
 
-	memset(&attr, 0, sizeof(attr));
-	attr.map_fd = fd;
-	attr.key = ptr_to_u64(key);
-	attr.value = ptr_to_u64(val0);
-	attr.flags = BPF_ANY;
+	memset(attr, 0, sizeof(*attr));
+	attr->map_fd = fd;
+	attr->key = ptr_to_u64(key);
+	attr->value = ptr_to_u64(val0);
+	attr->flags = BPF_ANY;
 
-	TEST(bpf(BPF_MAP_UPDATE_ELEM, &attr, sizeof(attr)));
+	TEST(bpf(BPF_MAP_UPDATE_ELEM, attr, sizeof(*attr)));
 	if (TST_RET == -1) {
 		tst_brk(TFAIL | TTERRNO,
 			"Update %s map element",
@@ -114,12 +105,12 @@ void run(unsigned int n)
 			map_types[n].name);
 	}
 
-	memset(&attr, 0, sizeof(attr));
-	attr.map_fd = fd;
-	attr.key = ptr_to_u64(key);
-	attr.value = ptr_to_u64(val1);
+	memset(attr, 0, sizeof(*attr));
+	attr->map_fd = fd;
+	attr->key = ptr_to_u64(key);
+	attr->value = ptr_to_u64(val1);
 
-	TEST(bpf(BPF_MAP_LOOKUP_ELEM, &attr, sizeof(attr)));
+	TEST(bpf(BPF_MAP_LOOKUP_ELEM, attr, sizeof(*attr)));
 	if (TST_RET == -1) {
 		tst_res(TFAIL | TTERRNO,
 			"%s map lookup missing",
@@ -137,7 +128,13 @@ void run(unsigned int n)
 
 static struct tst_test test = {
 	.tcnt = 2,
-	.setup = setup,
 	.test = run,
 	.min_kver = "3.18",
+	.bufs = (struct tst_buffers []) {
+		{&key, .size = KEY_SZ},
+		{&val0, .size = VAL_SZ},
+		{&val1, .size = VAL_SZ},
+		{&attr, .size = sizeof(*attr)},
+		{NULL},
+	},
 };
