@@ -18,6 +18,7 @@
 /* Start copy from linux/bpf_(common).h */
 #define BPF_CLASS(code) ((code) & 0x07)
 #define		BPF_LD		0x00
+#define		BPF_LDX		0x01
 #define		BPF_ST		0x02
 #define		BPF_STX		0x03
 #define		BPF_JMP		0x05
@@ -486,6 +487,14 @@ enum bpf_func_id {
 		.src_reg = 0,					\
 		.off   = OFF,					\
 		.imm   = IMM })
+
+#define BPF_LDX_MEM(SIZE, DST, SRC, OFF)			\
+	((struct bpf_insn) {					\
+		.code  = BPF_LDX | BPF_SIZE(SIZE) | BPF_MEM,	\
+		.dst_reg = DST,					\
+		.src_reg = SRC,					\
+		.off   = OFF,					\
+		.imm   = 0 })
 
 #define BPF_STX_MEM(SIZE, DST, SRC, OFF)			\
 	((struct bpf_insn) {					\
