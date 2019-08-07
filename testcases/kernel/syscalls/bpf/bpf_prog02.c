@@ -6,6 +6,7 @@
  * regression which only effects unprivileged users who are subject to extra
  * pointer arithmetic checks during verification.
  *
+ * Fixed by commit 3612af783cf52c74a031a2f11b82247b2599d3cd.
  * https://new.blog.cloudflare.com/ebpf-cant-count/
  *
  * This test is very similar in structure to bpf_prog01 which is better
