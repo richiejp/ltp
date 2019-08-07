@@ -17,6 +17,11 @@
 #include <stdio.h>
 
 #include "config.h"
+#ifdef HAVE_LIBCAP
+# include <sys/capability.h>
+#endif
+
+#include "config.h"
 #include "tst_test.h"
 #include "lapi/socket.h"
 #include "lapi/bpf.h"
@@ -31,7 +36,7 @@ static uint32_t *key;
 static uint64_t *val;
 static union bpf_attr *attr;
 
-int load_prog(int fd)
+static int load_prog(int fd)
 {
 	struct bpf_insn *prog;
 	struct bpf_insn insn[] = {
@@ -90,12 +95,25 @@ int load_prog(int fd)
 	return TST_RET;
 }
 
-void setup(void)
+static void setup(void)
 {
 	memcpy(msg, MSG, sizeof(MSG));
+
+#ifdef HAVE_LIBCAP
+	cap_value_t cap_value[] = { CAP_SYS_ADMIN };
+	cap_t cap = cap_get_proc();
+	if (!cap)
+		tst_brk(TBROK | TERRNO, "cap_get_proc failed");
+
+	if (cap_set_flag(cap, CAP_EFFECTIVE, 1, cap_value, CAP_CLEAR))
+		tst_brk(TBROK | TERRNO, "cap_set_flag failed");
+
+	if (cap_set_proc(cap))
+		tst_brk(TBROK | TERRNO, "cap_set_proc failed");
+#endif
 }
 
-void run(void)
+static void run(void)
 {
 	int map_fd, prog_fd;
 	int sk[2];
