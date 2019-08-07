@@ -27,7 +27,7 @@
 #include "lapi/socket.h"
 #include "lapi/bpf.h"
 
-#define A64INT (((uint64_t)1) << 31)
+#define A64INT (((uint64_t)1) << 60)
 
 const char MSG[] = "Ahoj!";
 static char *msg;
@@ -50,7 +50,7 @@ static int load_prog(int fd)
 		BPF_EMIT_CALL(BPF_FUNC_map_lookup_elem),
 		BPF_JMP_IMM(BPF_JEQ, BPF_REG_0, 0, 17), /* if(!r0) goto exit */
 		BPF_MOV64_REG(BPF_REG_3, BPF_REG_0),    /* r3 = r0 */
-		BPF_LD_IMM64(BPF_REG_4, A64INT),        /* r4 = 2^32 */
+		BPF_LD_IMM64(BPF_REG_4, A64INT),        /* r4 = 2^61 */
 		BPF_ALU64_REG(BPF_ADD, BPF_REG_4, BPF_REG_6), /* r4 += r6 */
 		BPF_STX_MEM(BPF_DW, BPF_REG_3, BPF_REG_4, 0), /* *r3 = r4 */
 
@@ -61,7 +61,7 @@ static int load_prog(int fd)
 		BPF_EMIT_CALL(BPF_FUNC_map_lookup_elem),
 		BPF_JMP_IMM(BPF_JEQ, BPF_REG_0, 0, 5),  /* if(!r0) goto exit */
 		BPF_MOV64_REG(BPF_REG_3, BPF_REG_0),    /* r3 = r0 */
-		BPF_LD_IMM64(BPF_REG_4, A64INT),        /* r4 = 2^32 */
+		BPF_LD_IMM64(BPF_REG_4, A64INT),        /* r4 = 2^61 */
 		BPF_ALU64_REG(BPF_SUB, BPF_REG_4, BPF_REG_6), /* r4 -= r6 */
 		BPF_STX_MEM(BPF_DW, BPF_REG_3, BPF_REG_4, 0), /* *r3 = r4 */
 
