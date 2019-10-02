@@ -146,10 +146,9 @@ static void run(void)
 		tst_res(TFAIL,
 			"val = %"PRIu64", but should be val = %"PRIu64" + 1",
 			*val, A64INT);
-		goto exit;
+	} else {
+		tst_res(TPASS, "val = %"PRIu64" + 1", A64INT);
 	}
-
-	tst_res(TPASS, "val = %"PRIu64" + 1", A64INT);
 
 	*key = 1;
 
