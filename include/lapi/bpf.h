@@ -21,9 +21,13 @@
 #define		BPF_LDX		0x01
 #define		BPF_ST		0x02
 #define		BPF_STX		0x03
+#define		BPF_ALU		0x04
 #define		BPF_JMP		0x05
 
+#define BPF_JNE		0x50	/* jump != */
+
 #define BPF_SIZE(code)  ((code) & 0x18)
+#define		BPF_W		0x00    /* 32-bit */
 #define         BPF_DW		0x18	/* double word (64-bit) */
 
 #define BPF_MODE(code)  ((code) & 0xe0)
@@ -33,6 +37,7 @@
 #define BPF_OP(code)    ((code) & 0xf0)
 #define		BPF_ADD		0x00
 #define		BPF_SUB		0x10
+#define		BPF_LSH		0x60
 
 #define		BPF_JEQ		0x10
 
@@ -515,6 +520,14 @@ enum bpf_func_id {
 #define BPF_MOV64_IMM(DST, IMM)					\
 	((struct bpf_insn) {					\
 		.code  = BPF_ALU64 | BPF_MOV | BPF_K,		\
+		.dst_reg = DST,					\
+		.src_reg = 0,					\
+		.off   = 0,					\
+		.imm   = IMM })
+
+#define BPF_MOV32_IMM(DST, IMM)					\
+	((struct bpf_insn) {					\
+		.code  = BPF_ALU | BPF_MOV | BPF_K,		\
 		.dst_reg = DST,					\
 		.src_reg = 0,					\
 		.off   = 0,					\
