@@ -53,6 +53,7 @@ SUBDIRS			+= connectors \
 			   sched \
 			   security \
 			   sound \
+			   syzkaller-repros \
 			   tracing \
 			   uevents \
 
