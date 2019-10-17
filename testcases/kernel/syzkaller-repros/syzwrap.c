@@ -9,6 +9,7 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <stdio.h>
+#include <pwd.h>
 
 #include "tst_test.h"
 #include "tst_taint.h"
@@ -23,6 +24,26 @@ static struct tst_option options[] = {
 	{"n:", &name, "Mandatory executable name of reproducer"},
 	{NULL, NULL, NULL}
 };
+
+static void become_nobody(void)
+{
+	struct passwd *pw;
+	int gid, uid;
+
+	setgroups(0, NULL);
+
+	pw = getpwnam("nobody");
+	if (pw) {
+		gid = pw->pw_gid;
+		uid = pw->pw_uid;
+	} else {
+		gid = 65534;
+		uid = 65534;
+	}
+
+	setregid(gid, gid);
+	setreuid(uid, uid);
+}
 
 static void setup(void)
 {
@@ -48,7 +69,8 @@ static void run(void)
 	int pid = SAFE_FORK();
 
 	if (!pid) {
-		execle(path, name, NULL, environ);
+		become_nobody();
+		execl(path, name, NULL);
 		tst_brk(TBROK | TERRNO, "Failed to exec reproducer");
 	}
 
