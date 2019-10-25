@@ -103,6 +103,5 @@ static struct tst_test test = {
 	.test_all = run,
 	.options = options,
 	.needs_tmpdir = 1,
-	.forks_child = 1,
-	.timeout = 20,
+	.forks_child = 1
 };
