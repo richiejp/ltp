@@ -1107,7 +1107,7 @@ void tst_set_timeout(int timeout)
 	if (mul) {
 		float m = atof(mul);
 
-		if (m < 1)
+		if (m <= 0)
 			tst_brk(TBROK, "Invalid timeout multiplier '%s'", mul);
 
 		results->timeout = results->timeout * m + 0.5;
