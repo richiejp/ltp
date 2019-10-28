@@ -7,6 +7,7 @@
 
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/prctl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <pwd.h>
@@ -70,6 +71,12 @@ static void run(void)
 
 	if (!pid) {
 		become_nobody();
+
+		if (prctl(PR_SET_DUMPABLE, 1, 0, 0, 0)) {
+			tst_res(TWARN | TERRNO,
+				"Failed to set dumpable; Won't be able to open /proc/self/*");
+		}
+
 		execl(path, name, NULL);
 		tst_brk(TBROK | TERRNO, "Failed to exec reproducer");
 	}
