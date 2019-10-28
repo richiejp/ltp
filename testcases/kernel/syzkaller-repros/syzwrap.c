@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/prctl.h>
+#include <sched.h>
 #include <signal.h>
 #include <stdio.h>
 #include <pwd.h>
@@ -46,6 +47,12 @@ static void become_nobody(void)
 	setreuid(uid, uid);
 }
 
+static void virtual_network(void)
+{
+	if (unshare(CLONE_NEWNET))
+		tst_res(TWARN | TERRNO, "Failed to create new network namespace");
+}
+
 static void setup(void)
 {
 	tst_taint_init(TST_TAINT_W | TST_TAINT_D | TST_TAINT_L);
@@ -67,14 +74,22 @@ static void run(void)
 	unsigned int backoff = 100;
 	int rem, status, sent_kill = 0;
 	float exec_time_start = (float)tst_timeout_remaining();
-	int pid = SAFE_FORK();
+	int pid;
 
+	if (unshare(CLONE_NEWPID)) {
+		tst_res(TWARN | TERRNO,
+			"Failed to create new PID namespace; reproducer will share PIDs with the parent namespace");
+	}
+
+	pid = SAFE_FORK();
 	if (!pid) {
+		virtual_network();
+
 		become_nobody();
 
 		if (prctl(PR_SET_DUMPABLE, 1, 0, 0, 0)) {
 			tst_res(TWARN | TERRNO,
-				"Failed to set dumpable; Won't be able to open /proc/self/*");
+				"Failed to set dumpable; won't be able to open /proc/self/*");
 		}
 
 		execl(path, name, NULL);
