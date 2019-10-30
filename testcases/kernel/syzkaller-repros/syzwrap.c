@@ -15,118 +15,21 @@
 #include <stdio.h>
 #include <pwd.h>
 
-#include <linux/rtnetlink.h>
-
 #include "tst_test.h"
 #include "tst_taint.h"
-#include "tst_netlink.h"
 #include "tst_safe_stdio.h"
 
-struct nlmsg_writer {
-	char *pos;
-	unsigned int depth;
-	struct nlattr* stack[8];
-	char buf[BUFSIZ];
-};
+#include "create_network.h"
 
 static char *dir;
 static char *name;
 static char *path;
-
-static struct nlmsg_writer *msg;
 
 static struct tst_option options[] = {
 	{"d:", &dir, "Mandatory directory containing reproducers"},
 	{"n:", &name, "Mandatory executable name of reproducer"},
 	{NULL, NULL, NULL}
 };
-
-static void nlmsg_write_head(uint16_t type, uint16_t flags,
-			     const void *data, uint32_t size)
-{
-	struct nlmsghdr* hdr = (struct nlmsghdr*)msg->buf;
-
-	memset(msg, 0, sizeof(*msg));
-
-	hdr->nlmsg_type = type;
-	hdr->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | flags;
-
-	memcpy(hdr + 1, data, size);
-
-	msg->pos = (char *)(hdr + 1) + NLMSG_ALIGN(size);
-}
-
-static void nlmsg_write_attr(uint16_t type, const void* data, int size)
-{
-	struct nlattr* attr = (struct nlattr*)msg->pos;
-
-	attr->nla_len = sizeof(*attr) + size;
-	attr->nla_type = type;
-
-	memcpy(attr + 1, data, size);
-
-	msg->pos += NLMSG_ALIGN(attr->nla_len);
-}
-
-static void nlmsg_push_attr(uint16_t type)
-{
-	struct nlattr* attr = (struct nlattr*)msg->pos;
-
-	attr->nla_type = type;
-
-	msg->pos += sizeof(*attr);
-	msg->stack[msg->depth++] = attr;
-}
-
-static void nlmsg_pop_attr(void)
-{
-	struct nlattr* attr = msg->stack[--msg->depth];
-
-	attr->nla_len = msg->pos - (char*)attr;
-}
-
-static int nlmsg_send(int sock)
-{
-	struct nlmsghdr* hdr = (struct nlmsghdr*)msg->buf;
-	struct sockaddr_nl addr;
-	unsigned n;
-
-	if (msg->pos > msg->buf + sizeof(msg->buf) || msg->depth)
-		tst_res(TBROK, "nlmsg attribute overflow/bad nesting");
-
-	hdr->nlmsg_len = msg->pos - msg->buf;
-
-	memset(&addr, 0, sizeof(addr));
-	addr.nl_family = AF_NETLINK;
-
-	SAFE_SENDTO(1, sock, msg->buf, hdr->nlmsg_len, 0, (struct sockaddr*)&addr, sizeof(addr));
-
-	n = recv(sock, msg->buf, sizeof(msg->buf), 0);
-	if (n < sizeof(struct nlmsghdr) + sizeof(struct nlmsgerr))
-		tst_brk(TBROK, "short netlink read: %d", n);
-	if (hdr->nlmsg_type != NLMSG_ERROR)
-		tst_brk(TBROK, "short netlink ack: %d", hdr->nlmsg_type);
-
-	return -((struct nlmsgerr*)(hdr + 1))->error;
-}
-
-static void nl_add_device(int sock, const char* type, const char* name)
-{
-	struct ifinfomsg hdr;
-
-	memset(&hdr, 0, sizeof(hdr));
-	nlmsg_write_head(RTM_NEWLINK, NLM_F_EXCL | NLM_F_CREATE, &hdr, sizeof(hdr));
-	if (name)
-		nlmsg_write_attr(IFLA_IFNAME, name, strlen(name));
-	nlmsg_push_attr(IFLA_LINKINFO);
-	nlmsg_write_attr(IFLA_INFO_KIND, type, strlen(type));
-	nlmsg_pop_attr();
-
-	int err = nlmsg_send(sock);
-	tst_res(TINFO, "netlink: adding device %s type %s: %s\n", name, type, strerror(err));
-
-	(void)err;
-}
 
 static void become_nobody(void)
 {
@@ -146,20 +49,6 @@ static void become_nobody(void)
 
 	setregid(gid, gid);
 	setreuid(uid, uid);
-}
-
-static void virtual_network(void)
-{
-	int sock;
-
-	if (unshare(CLONE_NEWNET))
-		tst_brk(TBROK | TERRNO, "Failed to create new network namespace");
-
-	sock = SAFE_SOCKET(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
-
-	nl_add_device(sock, "bridge", "bridge0");
-
-	SAFE_CLOSE(sock);
 }
 
 static void setup(void)
@@ -192,8 +81,7 @@ static void run(void)
 
 	pid = SAFE_FORK();
 	if (!pid) {
-		virtual_network();
-
+		create_network();
 		become_nobody();
 
 		if (prctl(PR_SET_DUMPABLE, 1, 0, 0, 0)) {
@@ -235,8 +123,4 @@ static struct tst_test test = {
 	.options = options,
 	.needs_tmpdir = 1,
 	.forks_child = 1,
-	.bufs = (struct tst_buffers[]) {
-		{&msg, .size = sizeof(*msg)},
-		{}
-	}
 };
