@@ -19,6 +19,8 @@
 #include "tst_taint.h"
 #include "tst_safe_stdio.h"
 
+static char *loud;
+
 #include "create_network.h"
 
 static char *dir;
@@ -26,8 +28,9 @@ static char *name;
 static char *path;
 
 static struct tst_option options[] = {
-	{"d:", &dir, "Mandatory directory containing reproducers"},
-	{"n:", &name, "Mandatory executable name of reproducer"},
+	{"d:", &dir,  "-d PATH\t Mandatory directory containing reproducers"},
+	{"n:", &name, "-n NAME\t Mandatory executable name of reproducer"},
+	{"v",  &loud, "-v\t Print info about sandboxing and device creation; recommend using once per batch"},
 	{NULL, NULL, NULL}
 };
 
@@ -47,8 +50,10 @@ static void become_nobody(void)
 		uid = 65534;
 	}
 
-	setregid(gid, gid);
-	setreuid(uid, uid);
+	if (setregid(gid, gid) && loud)
+		tst_res(TINFO | TERRNO, "Failed to switch to nobody group");
+	if (setreuid(uid, uid) && loud)
+		tst_res(TINFO | TERRNO, "Failed to switch to nobody user");
 }
 
 static void setup(void)
@@ -64,7 +69,8 @@ static void setup(void)
 	tst_res(TINFO, "https://syzkaller.appspot.com/bug?id=%s", name);
 
 	SAFE_ASPRINTF(&path, "%s/%s", dir, name);
-	tst_res(TINFO, "%s", path);
+	if (loud)
+		tst_res(TINFO, "Reproducer path: %s", path);
 }
 
 static void run(void)
@@ -74,8 +80,8 @@ static void run(void)
 	float exec_time_start = (float)tst_timeout_remaining();
 	int pid;
 
-	if (unshare(CLONE_NEWPID)) {
-		tst_res(TWARN | TERRNO,
+	if (unshare(CLONE_NEWPID) && loud) {
+		tst_res(TINFO | TERRNO,
 			"Failed to create new PID namespace; reproducer will share PIDs with the parent namespace");
 	}
 
@@ -84,7 +90,7 @@ static void run(void)
 		create_network();
 		become_nobody();
 
-		if (prctl(PR_SET_DUMPABLE, 1, 0, 0, 0)) {
+		if (prctl(PR_SET_DUMPABLE, 1, 0, 0, 0) && loud) {
 			tst_res(TWARN | TERRNO,
 				"Failed to set dumpable; won't be able to open /proc/self/*");
 		}

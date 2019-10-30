@@ -131,7 +131,7 @@ static int nlmsg_send(int sock)
 	unsigned n;
 
 	if (msg.pos > msg.buf + sizeof(msg.buf) || msg.depth)
-		tst_res(TBROK, "nlmsg attribute overflow/bad nesting");
+		tst_brk(TBROK, "nlmsg attribute overflow/bad nesting");
 
 	hdr->nlmsg_len = msg.pos - msg.buf;
 
@@ -169,8 +169,10 @@ static void nl_add_device(int sock, const char* type, const char* name)
 	nlmsg_pop_attr(); 	/* LINKINFO */
 
 	int err = nlmsg_send(sock);
-	tst_res(TINFO, "adding device %s type %s: %s",
-		name, type, strerror(err));
+	if (loud) {
+		tst_res(TINFO, "adding device %s type %s: %s",
+			name, type, strerror(err));
+	}
 
 	(void)err;
 }
@@ -189,8 +191,10 @@ static void nl_add_veth(int sock, const char* name, const char* peer)
 	nlmsg_pop_attr(); 	/* LINKINFO */
 
 	int err = nlmsg_send(sock);
-	tst_res(TINFO, "adding device %s type veth peer %s: %s",
-		name, peer, strerror(err));
+	if (loud) {
+		tst_res(TINFO, "adding device %s type veth peer %s: %s",
+			name, peer, strerror(err));
+	}
 
 	(void)err;
 }
@@ -212,8 +216,10 @@ static void nl_add_hsr(int sock, const char* name,
 	nlmsg_pop_attr(); 	/* LINKINFO */
 
 	err = nlmsg_send(sock);
-	tst_res(TINFO, "adding device %s type hsr slave1 %s slave2 %s: %s",
-		name, slave1, slave2, strerror(err));
+	if (loud) {
+		tst_res(TINFO, "adding device %s type hsr slave1 %s slave2 %s: %s",
+			name, slave1, slave2, strerror(err));
+	}
 
 	(void)err;
 }
@@ -239,7 +245,10 @@ static void nl_device_change(int sock, const char* name, char up,
 		nlmsg_write_attr(IFLA_ADDRESS, mac, macsize);
 
 	err = nlmsg_send(sock);
-	tst_res(TINFO, "device %s up master %s: %s", name, master, strerror(err));
+	if (loud) {
+		tst_res(TINFO, "device %s up master %s: %s",
+			name, master, strerror(err));
+	}
 
 	(void)err;
 }
@@ -270,7 +279,8 @@ static void nl_add_addr4(int sock, const char* dev, const char* addr)
 
 	inet_pton(AF_INET, addr, &in_addr);
 	err = nl_add_addr(sock, dev, &in_addr, sizeof(in_addr));
-	tst_res(TINFO, "add addr %s dev %s: %s", addr, dev, strerror(err));
+	if (loud)
+		tst_res(TINFO, "add addr %s dev %s: %s", addr, dev, strerror(err));
 
 	(void)err;
 }
@@ -282,7 +292,8 @@ static void nl_add_addr6(int sock, const char* dev, const char* addr)
 
 	inet_pton(AF_INET6, addr, &in6_addr);
 	err = nl_add_addr(sock, dev, &in6_addr, sizeof(in6_addr));
-	tst_res(TINFO, "add addr %s dev %s: %s", addr, dev, strerror(err));
+	if (loud)
+		tst_res(TINFO, "add addr %s dev %s: %s", addr, dev, strerror(err));
 
 	(void)err;
 }
@@ -294,8 +305,13 @@ static void create_network(void)
 	char master[32], slave0[32], veth0[32], slave1[32], veth1[32], addr[32];
 	uint64_t macaddr;
 
-	if (unshare(CLONE_NEWNET))
-		tst_brk(TBROK | TERRNO, "Failed to create new network namespace");
+	if (unshare(CLONE_NEWNET)) {
+		if (loud) {
+			tst_res(TINFO | TERRNO,
+				"Failed to create network namespace; won't try to create network devices");
+		}
+		return;
+	}
 
 	sock = SAFE_SOCKET(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
 
