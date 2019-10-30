@@ -1,3 +1,5 @@
+#include <net/if.h>
+#include <arpa/inet.h>
 
 #include <linux/if_ether.h>
 #include <linux/if_addr.h>
@@ -8,6 +10,10 @@
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 #include <linux/veth.h>
+
+#define DEV_IPV4 "172.20.20.%d"
+#define DEV_IPV6 "fe80::%02x"
+#define DEV_MAC 0x00aaaaaaaaaa
 
 static struct {
 	char *pos;
@@ -33,6 +39,8 @@ static struct {
 	{"netdevsim", "netdevsim0"},
 	{"veth", 0},
 };
+
+const char* devmasters[] = {"bridge", "bond", "team"};
 
 static struct {
 	const char* name;
@@ -141,7 +149,7 @@ static int nlmsg_send(int sock)
 	return -((struct nlmsgerr*)(hdr + 1))->error;
 }
 
-static void nl_add_device(int sock, const char* type, const char* name)
+static void nlmsg_add_device_head(const char* type, const char* name)
 {
 	struct ifinfomsg hdr;
 
@@ -149,12 +157,132 @@ static void nl_add_device(int sock, const char* type, const char* name)
 	nlmsg_write_head(RTM_NEWLINK, NLM_F_EXCL | NLM_F_CREATE, &hdr, sizeof(hdr));
 	if (name)
 		nlmsg_write_attr(IFLA_IFNAME, name, strlen(name));
+
 	nlmsg_push_attr(IFLA_LINKINFO);
 	nlmsg_write_attr(IFLA_INFO_KIND, type, strlen(type));
-	nlmsg_pop_attr();
+}
+
+static void nl_add_device(int sock, const char* type, const char* name)
+{
+	nlmsg_add_device_head(type, name);
+
+	nlmsg_pop_attr(); 	/* LINKINFO */
 
 	int err = nlmsg_send(sock);
-	tst_res(TINFO, "netlink: adding device %s type %s: %s", name, type, strerror(err));
+	tst_res(TINFO, "adding device %s type %s: %s",
+		name, type, strerror(err));
+
+	(void)err;
+}
+
+static void nl_add_veth(int sock, const char* name, const char* peer)
+{
+	nlmsg_add_device_head("veth", name);
+
+	nlmsg_push_attr(IFLA_INFO_DATA);
+	nlmsg_push_attr(VETH_INFO_PEER);
+	msg.pos += sizeof(struct ifinfomsg);
+	nlmsg_write_attr(IFLA_IFNAME, peer, strlen(peer));
+	nlmsg_pop_attr();
+	nlmsg_pop_attr();
+
+	nlmsg_pop_attr(); 	/* LINKINFO */
+
+	int err = nlmsg_send(sock);
+	tst_res(TINFO, "adding device %s type veth peer %s: %s",
+		name, peer, strerror(err));
+
+	(void)err;
+}
+
+static void nl_add_hsr(int sock, const char* name,
+		       const char* slave1, const char* slave2)
+{
+	int ifindex1, ifindex2, err;
+
+	nlmsg_add_device_head("hsr", name);
+
+	nlmsg_push_attr(IFLA_INFO_DATA);
+	ifindex1 = if_nametoindex(slave1);
+	nlmsg_write_attr(IFLA_HSR_SLAVE1, &ifindex1, sizeof(ifindex1));
+	ifindex2 = if_nametoindex(slave2);
+	nlmsg_write_attr(IFLA_HSR_SLAVE2, &ifindex2, sizeof(ifindex2));
+	nlmsg_pop_attr();
+
+	nlmsg_pop_attr(); 	/* LINKINFO */
+
+	err = nlmsg_send(sock);
+	tst_res(TINFO, "adding device %s type hsr slave1 %s slave2 %s: %s",
+		name, slave1, slave2, strerror(err));
+
+	(void)err;
+}
+
+static void nl_device_change(int sock, const char* name, char up,
+				  const char* master, const void* mac, int macsize)
+{
+	struct ifinfomsg hdr;
+	int ifindex, err;
+
+	memset(&hdr, 0, sizeof(hdr));
+	hdr.ifi_flags = hdr.ifi_change = up ? IFF_UP : 0;
+	nlmsg_write_head(RTM_NEWLINK, 0, &hdr, sizeof(hdr));
+
+	nlmsg_write_attr(IFLA_IFNAME, name, strlen(name));
+
+	if (master) {
+		ifindex = if_nametoindex(master);
+		nlmsg_write_attr(IFLA_MASTER, &ifindex, sizeof(ifindex));
+	}
+
+	if (macsize)
+		nlmsg_write_attr(IFLA_ADDRESS, mac, macsize);
+
+	err = nlmsg_send(sock);
+	tst_res(TINFO, "device %s up master %s: %s", name, master, strerror(err));
+
+	(void)err;
+}
+
+static int nl_add_addr(int sock, const char* dev,
+			    const void* addr, int addrsize)
+{
+	struct ifaddrmsg hdr;
+
+	memset(&hdr, 0, sizeof(hdr));
+	hdr.ifa_family = addrsize == 4 ? AF_INET : AF_INET6;
+	hdr.ifa_prefixlen = addrsize == 4 ? 24 : 120;
+	hdr.ifa_scope = RT_SCOPE_UNIVERSE;
+	hdr.ifa_index = if_nametoindex(dev);
+
+	nlmsg_write_head(RTM_NEWADDR, NLM_F_CREATE | NLM_F_REPLACE, &hdr, sizeof(hdr));
+
+	nlmsg_write_attr(IFA_LOCAL, addr, addrsize);
+	nlmsg_write_attr(IFA_ADDRESS, addr, addrsize);
+
+	return nlmsg_send(sock);
+}
+
+static void nl_add_addr4(int sock, const char* dev, const char* addr)
+{
+	struct in_addr in_addr;
+	int err;
+
+	inet_pton(AF_INET, addr, &in_addr);
+	err = nl_add_addr(sock, dev, &in_addr, sizeof(in_addr));
+	tst_res(TINFO, "add addr %s dev %s: %s", addr, dev, strerror(err));
+
+	(void)err;
+}
+
+static void nl_add_addr6(int sock, const char* dev, const char* addr)
+{
+	struct in6_addr in6_addr;
+	int err;
+
+	inet_pton(AF_INET6, addr, &in6_addr);
+	err = nl_add_addr(sock, dev, &in6_addr, sizeof(in6_addr));
+	tst_res(TINFO, "add addr %s dev %s: %s", addr, dev, strerror(err));
 
 	(void)err;
 }
@@ -163,6 +291,8 @@ static void create_network(void)
 {
 	int sock;
 	unsigned i;
+	char master[32], slave0[32], veth0[32], slave1[32], veth1[32], addr[32];
+	uint64_t macaddr;
 
 	if (unshare(CLONE_NEWNET))
 		tst_brk(TBROK | TERRNO, "Failed to create new network namespace");
@@ -171,6 +301,43 @@ static void create_network(void)
 
 	for (i = 0; i < ARRAY_SIZE(net_devtypes); i++)
 		nl_add_device(sock, net_devtypes[i].type, net_devtypes[i].name);
+
+	for (i = 0; i < sizeof(devmasters) / (sizeof(devmasters[0])); i++) {
+		sprintf(slave0, "%s_slave_0", devmasters[i]);
+		sprintf(veth0, "veth0_to_%s", devmasters[i]);
+		nl_add_veth(sock, slave0, veth0);
+
+		sprintf(slave1, "%s_slave_1", devmasters[i]);
+		sprintf(veth1, "veth1_to_%s", devmasters[i]);
+		nl_add_veth(sock, slave1, veth1);
+
+		sprintf(master, "%s0", devmasters[i]);
+		nl_device_change(sock, slave0, 0, master, 0, 0);
+		nl_device_change(sock, slave1, 0, master, 0, 0);
+	}
+
+	nl_device_change(sock, "bridge_slave_0", 1, 0, 0, 0);
+	nl_device_change(sock, "bridge_slave_1", 1, 0, 0, 0);
+
+	nl_add_veth(sock, "hsr_slave_0", "veth0_to_hsr");
+	nl_add_veth(sock, "hsr_slave_1", "veth1_to_hsr");
+	nl_add_hsr(sock, "hsr0", "hsr_slave_0", "hsr_slave_1");
+	nl_device_change(sock, "hsr_slave_0", 1, 0, 0, 0);
+	nl_device_change(sock, "hsr_slave_1", 1, 0, 0, 0);
+
+	for (i = 0; i < sizeof(net_devices) / (sizeof(net_devices[0])); i++) {
+		sprintf(addr, DEV_IPV4, i + 10);
+		nl_add_addr4(sock, net_devices[i].name, addr);
+
+		if (!net_devices[i].noipv6) {
+			sprintf(addr, DEV_IPV6, i + 10);
+			nl_add_addr6(sock, net_devices[i].name, addr);
+		}
+
+		macaddr = DEV_MAC + ((i + 10ull) << 40);
+		nl_device_change(sock, net_devices[i].name, 1, 0,
+				 &macaddr, net_devices[i].macsize);
+	}
 
 	SAFE_CLOSE(sock);
 }
