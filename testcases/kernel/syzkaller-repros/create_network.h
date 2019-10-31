@@ -298,7 +298,32 @@ static void nl_add_addr6(int sock, const char* dev, const char* addr)
 	(void)err;
 }
 
-static void create_network(void)
+static void nl_add_neigh(int sock, const char* name,
+			 const void* addr, int addrsize,
+			 const void* mac, int macsize)
+{
+	struct ndmsg hdr;
+
+	memset(&hdr, 0, sizeof(hdr));
+	hdr.ndm_family = addrsize == 4 ? AF_INET : AF_INET6;
+	hdr.ndm_ifindex = if_nametoindex(name);
+	hdr.ndm_state = NUD_PERMANENT;
+
+	nlmsg_write_head(RTM_NEWNEIGH, NLM_F_EXCL | NLM_F_CREATE,
+			 &hdr, sizeof(hdr));
+	nlmsg_write_attr(NDA_DST, addr, addrsize);
+	nlmsg_write_attr(NDA_LLADDR, mac, macsize);
+
+	err = nlmsg_send(sock);
+	if (loud) {
+		tst_res(TINFO, "add neigh %s addr %d lladdr %d: %s",
+			name, addrsize, macsize, strerror(err));
+	}
+
+	(void)err;
+}
+
+static void create_network_devices(void)
 {
 	int sock;
 	unsigned i;
@@ -356,4 +381,75 @@ static void create_network(void)
 	}
 
 	SAFE_CLOSE(sock);
+}
+
+static void create_tun(void)
+{
+	tunfd = open("/dev/net/tun", O_RDWR | O_NONBLOCK);
+	if (tunfd == -1) {
+#if SYZ_EXECUTOR
+		fail("tun: can't open /dev/net/tun");
+#else
+		printf("tun: can't open /dev/net/tun: please enable CONFIG_TUN=y\n");
+		printf("otherwise fuzzing or reproducing might not work as intended\n");
+		return;
+#endif
+	}
+	// Remap tun onto higher fd number to hide it from fuzzer and to keep
+	// fd numbers stable regardless of whether tun is opened or not (also see kMaxFd).
+	const int kTunFd = 240;
+	if (dup2(tunfd, kTunFd) < 0)
+		fail("dup2(tunfd, kTunFd) failed");
+	close(tunfd);
+	tunfd = kTunFd;
+
+	struct ifreq ifr;
+	memset(&ifr, 0, sizeof(ifr));
+	strncpy(ifr.ifr_name, TUN_IFACE, IFNAMSIZ);
+	ifr.ifr_flags = IFF_TAP | IFF_NO_PI | IFF_NAPI | IFF_NAPI_FRAGS;
+	if (ioctl(tunfd, TUNSETIFF, (void*)&ifr) < 0) {
+		// IFF_NAPI_FRAGS requires root, so try without it.
+		ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
+		if (ioctl(tunfd, TUNSETIFF, (void*)&ifr) < 0)
+			fail("tun: ioctl(TUNSETIFF) failed");
+	}
+	// If IFF_NAPI_FRAGS is not supported it will be silently dropped,
+	// so query the effective flags.
+	if (ioctl(tunfd, TUNGETIFF, (void*)&ifr) < 0)
+		fail("tun: ioctl(TUNGETIFF) failed");
+	tun_frags_enabled = (ifr.ifr_flags & IFF_NAPI_FRAGS) != 0;
+	debug("tun_frags_enabled=%d\n", tun_frags_enabled);
+
+	// Disable IPv6 DAD, otherwise the address remains unusable until DAD completes.
+	// Don't panic because this is an optional config.
+	char sysctl[64];
+	sprintf(sysctl, "/proc/sys/net/ipv6/conf/%s/accept_dad", TUN_IFACE);
+	write_file(sysctl, "0");
+	// Disable IPv6 router solicitation to prevent IPv6 spam.
+	// Don't panic because this is an optional config.
+	sprintf(sysctl, "/proc/sys/net/ipv6/conf/%s/router_solicitations", TUN_IFACE);
+	write_file(sysctl, "0");
+	// There seems to be no way to disable IPv6 MTD to prevent more IPv6 spam.
+
+	int sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+	if (sock == -1)
+		fail("socket(AF_NETLINK) failed");
+
+	netlink_add_addr4(sock, TUN_IFACE, LOCAL_IPV4);
+	netlink_add_addr6(sock, TUN_IFACE, LOCAL_IPV6);
+	uint64 macaddr = REMOTE_MAC;
+	struct in_addr in_addr;
+	inet_pton(AF_INET, REMOTE_IPV4, &in_addr);
+	netlink_add_neigh(sock, TUN_IFACE, &in_addr, sizeof(in_addr), &macaddr, ETH_ALEN);
+	struct in6_addr in6_addr;
+	inet_pton(AF_INET6, REMOTE_IPV6, &in6_addr);
+	netlink_add_neigh(sock, TUN_IFACE, &in6_addr, sizeof(in6_addr), &macaddr, ETH_ALEN);
+	macaddr = LOCAL_MAC;
+	netlink_device_change(sock, TUN_IFACE, true, 0, &macaddr, ETH_ALEN);
+	close(sock);
+}
+
+static void create_network(void)
+{
+	create_network_devices();
 }
