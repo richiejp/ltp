@@ -17,13 +17,24 @@
 #include "tst_taint.h"
 #include "tst_safe_stdio.h"
 
+#define SANDBOX_HELP "\n"\
+	"-s\t Add some sandboxing around the reproducer. This will prevent some\n"\
+	"\t reproducers from creating network devices and thus prevent them from\n"\
+	"\t working. However it will also prevent some reproducers from trashing\n"\
+	"\t the system using root privileges. Note that you may generate the\n"\
+	"\t reproducers with various types of sandboxing built in using\n"\
+	"\t syz-reprolist"
+
 static char *dir;
 static char *name;
 static char *path;
 
+static char *sandbox;
+
 static struct tst_option options[] = {
-	{"d:", &dir, "Mandatory directory containing reproducers"},
-	{"n:", &name, "Mandatory executable name of reproducer"},
+	{"d:", &dir, "\n-d PATH\t Mandatory directory containing reproducers"},
+	{"n:", &name, "-n NAME\t Mandatory executable name of reproducer"},
+	{"s", &sandbox, SANDBOX_HELP},
 	{NULL, NULL, NULL}
 };
 
@@ -43,14 +54,8 @@ static void become_nobody(void)
 		uid = 65534;
 	}
 
-	setregid(gid, gid);
-	setreuid(uid, uid);
-}
-
-static void virtual_network(void)
-{
-	if (unshare(CLONE_NEWNET))
-		tst_res(TWARN | TERRNO, "Failed to create new network namespace");
+	SAFE_SETREGID(gid, gid);
+	SAFE_SETREUID(uid, uid);
 }
 
 static void setup(void)
@@ -76,16 +81,15 @@ static void run(void)
 	float exec_time_start = (float)tst_timeout_remaining();
 	int pid;
 
-	if (unshare(CLONE_NEWPID)) {
-		tst_res(TWARN | TERRNO,
-			"Failed to create new PID namespace; reproducer will share PIDs with the parent namespace");
-	}
+	if (sandbox)
+		SAFE_UNSHARE(CLONE_NEWPID);
 
 	pid = SAFE_FORK();
 	if (!pid) {
-		virtual_network();
-
-		become_nobody();
+		if (sandbox) {
+			SAFE_UNSHARE(CLONE_NEWNET);
+			become_nobody();
+		}
 
 		if (prctl(PR_SET_DUMPABLE, 1, 0, 0, 0)) {
 			tst_res(TWARN | TERRNO,
