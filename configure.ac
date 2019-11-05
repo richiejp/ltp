@@ -184,6 +184,17 @@ else
     AC_SUBST([WITH_OPEN_POSIX_TESTSUITE],["no"])
 fi
 
+AC_ARG_WITH([syzkaller-repros],
+  [AC_HELP_STRING([--with-syzkaller-repros],
+    [compile and install Syzkaller reproducers (default=no)])],
+  [with_syzkaller_repros=$withval]
+)
+if test "x$with_syzkaller_repros" = xyes; then
+    AC_SUBST([WITH_SYZKALLER_REPROS],["yes"])
+else
+    AC_SUBST([WITH_SYZKALLER_REPROS],["no"])
+fi
+
 # testcases/realtime requires bash and python.
 if test "x$with_bash" = xyes && test "x$with_python" = xyes; then
     AC_ARG_WITH([realtime-testsuite],
