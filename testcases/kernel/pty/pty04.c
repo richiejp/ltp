@@ -23,6 +23,11 @@
  * until we are in the netdev code which can have a bigger buffer. Of course
  * the MTU still decides exactly where the packet delimiter goes, this just
  * concerns choosing the best packet size to cause a race.
+ *
+ * Note on line discipline encapsulation formats:
+ * - For SLIP frames we just write the data followed by a delimiter char
+ * - SLCAN we write some ASCII described in drivers/net/can/slcan.c which is
+ *   converted to the actual frame by the kernel
  */
 
 #define _GNU_SOURCE
@@ -36,6 +41,13 @@
 #include <linux/if_ether.h>
 #include <linux/tty.h>
 
+#ifdef HAVE_LINUX_CAN_H
+# include <linux/can.h>
+#else
+# define CAN_MTU 16
+# define CAN_MAX_DLEN 8
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
@@ -48,14 +60,17 @@
 
 #include "tst_safe_stdio.h"
 
+#define SLCAN_FRAME "t00185f5f5f5f5f5f5f5f\r"
+
 struct ldisc_info {
 	int n;
 	char *name;
-	int max_mtu;
+	int mtu;
 };
 
 static struct ldisc_info ldiscs[] = {
 	{N_SLIP, "N_SLIP", 8192},
+	{N_SLCAN, "N_SLCAN", CAN_MTU},
 };
 
 static volatile int ptmx, pts, sk, mtu, no_check;
@@ -109,22 +124,40 @@ static ssize_t try_write(int fd, char *data, ssize_t size, ssize_t *written)
 	return !written || (*written += ret) >= size;
 }
 
-static void write_pty(void)
+static void write_pty(struct ldisc_info *ldisc)
 {
-	char *data = tst_alloc(mtu);
+	char *data;
 	ssize_t written, ret;
+	size_t len = 0;
 
-	memset(data, '_', mtu - 1);
-	data[mtu - 1] = 0300;
+	switch (ldisc->n) {
+	case N_SLIP:
+		len = mtu; break;
+	case N_SLCAN:
+		len = sizeof(SLCAN_FRAME); break;
+	}
+
+	data = tst_alloc(len);
+
+	switch (ldisc->n) {
+	case N_SLIP:
+		memset(data, '_', len - 1);
+		data[len - 1] = 0300;
+		break;
+	case N_SLCAN:
+		memcpy(data, SLCAN_FRAME, len);
+		break;
+	}
+
 
 	written = 0;
-	ret = TST_RETRY_FUNC(try_write(ptmx, data, mtu, &written), TST_RETVAL_NOTNULL);
+	ret = TST_RETRY_FUNC(try_write(ptmx, data, len, &written), TST_RETVAL_NOTNULL);
 	if (ret < 0)
 		tst_brk(TBROK | TERRNO, "Failed 1st write to PTY");
 	tst_res(TPASS, "Wrote PTY 1");
 
 	written = 0;
-	ret = TST_RETRY_FUNC(try_write(ptmx, data, mtu, &written), TST_RETVAL_NOTNULL);
+	ret = TST_RETRY_FUNC(try_write(ptmx, data, len, &written), TST_RETVAL_NOTNULL);
 	if (ret < 0)
 		tst_brk(TBROK | TERRNO, "Failed 2nd write to PTY");
 
@@ -133,7 +166,7 @@ static void write_pty(void)
 
 	tst_res(TPASS, "Wrote PTY 2");
 
-	while (try_write(ptmx, data, mtu, NULL) >= 0)
+	while (try_write(ptmx, data, len, NULL) >= 0)
 		;
 
 	tst_res(TPASS, "Writing to PTY interrupted by hangup");
@@ -151,12 +184,12 @@ static void open_netdev(struct ldisc_info *ldisc)
 
 	sk = SAFE_SOCKET(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
 
-	ifreq.ifr_mtu = ldisc->max_mtu;
+	ifreq.ifr_mtu = ldisc->mtu;
 	if (ioctl(sk, SIOCSIFMTU, &ifreq))
 		tst_res(TWARN | TERRNO, "Failed to set netdev MTU to maximum");
 	SAFE_IOCTL(sk, SIOCGIFMTU, &ifreq);
 	mtu = ifreq.ifr_mtu;
-	tst_res(TINFO, "Netdev MTU is %d (we set %d)", mtu, ldisc->max_mtu);
+	tst_res(TINFO, "Netdev MTU is %d (we set %d)", mtu, ldisc->mtu);
 
 	SAFE_IOCTL(sk, SIOCGIFFLAGS, &ifreq);
 	ifreq.ifr_flags |= IFF_UP | IFF_RUNNING;
@@ -195,26 +228,38 @@ static void check_data(const char *data, ssize_t len)
 	j--;
 
 	tst_res_hexd(TFAIL, data + i, j - i,
-		     "Corrupt data (max 64 bytes shown): data[%ld..%ld] = ",
-		     i, j);
+		     "Corrupt data (max 64 of %ld bytes shown): data[%ld..%ld] = ",
+		     len, i, j);
 	tst_res(TINFO, "Will continue test without data checking");
 	no_check = 1;
 }
 
-static void read_netdev(void)
+static void read_netdev(struct ldisc_info *ldisc)
 {
-	int rlen, plen = mtu - 1;
-	char *data = tst_alloc(plen);
+	int rlen, plen = 0;
+	char *data;
+
+	switch (ldisc->n) {
+	case N_SLIP:
+		plen = mtu - 1;
+		break;
+
+#ifdef HAVE_LINUX_CAN_H
+	case N_SLCAN:
+		plen = CAN_MTU;
+		break;
+#endif
+	}
+	data = tst_alloc(plen);
 
 	tst_res(TINFO, "Reading from socket %d", sk);
 
 	SAFE_READ(1, sk, data, plen);
 	check_data(data, plen);
-
 	tst_res(TPASS, "Read netdev 1");
+
 	SAFE_READ(1, sk, data, plen);
 	check_data(data, plen);
-
 	tst_res(TPASS, "Read netdev 2");
 
 	TST_CHECKPOINT_WAKE(0);
@@ -236,12 +281,12 @@ static void do_test(unsigned int n)
 	open_netdev(ldisc);
 
 	if (!SAFE_FORK()) {
-		read_netdev();
+		read_netdev(ldisc);
 		return;
 	}
 
 	if (!SAFE_FORK()) {
-		write_pty();
+		write_pty(ldisc);
 		return;
 	}
 
@@ -268,7 +313,7 @@ static void cleanup(void)
 static struct tst_test test = {
 	.test = do_test,
 	.cleanup = cleanup,
-	.tcnt = 1,
+	.tcnt = 2,
 	.forks_child = 1,
 	.needs_checkpoints = 1,
 	.needs_root = 1,
