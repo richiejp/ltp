@@ -11,6 +11,8 @@ test15: CFLAGS+=-pthread
 test16: CFLAGS+=-pthread
 test16: LDLIBS+=-lrt
 tst_expiration_timer: LDLIBS+=-lrt
+tst_syzkaller_demo: CFLAGS+=-pthread
+tst_syzkaller_demo: LDLIBS+=-lrt
 
 ifeq ($(ANDROID),1)
 FILTER_OUT_MAKE_TARGETS	+= test08
