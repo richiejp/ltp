@@ -32,3 +32,4 @@ test_exec_child
 test_kconfig
 variant
 test_guarded_buf
+tst_fuzzy_sync_demo
