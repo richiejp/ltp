@@ -40,13 +40,11 @@ static void setup(void)
 
 static void *worker(void *v LTP_ATTRIBUTE_UNUSED)
 {
-	volatile unsigned long long c;
+	struct timespec delay = { 0, 1 };
 
 	while (tst_fzsync_run_b(&pair)) {
 		tst_fzsync_start_race_b(&pair);
-		c = ~0ULL;
-		while (c)
-			c <<= 1;
+		nanosleep(&delay, NULL);
 		winner = 'B';
 		tst_fzsync_end_race_b(&pair);
 	}
